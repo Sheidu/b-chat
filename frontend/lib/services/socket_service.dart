@@ -48,7 +48,7 @@ class SocketService with ChangeNotifier {
     _socket!.connect();
   }
 
-  void sendMessage({
+  bool sendMessage({
     required int fromId,
     required int toId,
     required String text,
@@ -56,7 +56,7 @@ class SocketService with ChangeNotifier {
   }) {
     if (!isConnected || _socket == null) {
       debugPrint('Cannot send: not connected');
-      return;
+      return false;
     }
 
     _socket!.emit('sendMessage', {
@@ -65,6 +65,7 @@ class SocketService with ChangeNotifier {
       'text': text,
       'clientToken': clientToken,
     });
+    return true;
   }
 
   void listenNewMessages(void Function(Message message) callback) {

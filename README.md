@@ -57,6 +57,10 @@ Use your machine's LAN IP (example `http://192.168.1.25:3000`) when testing from
 - Adding `client_token` uses `ALTER TABLE ... ADD COLUMN` migration logic and **does not clear existing rows**.
 - `new Database(dbPath, ...)` does **not** wipe an existing file, but it will create a new DB file if one does not exist.
 - To fail fast instead of creating a new DB file accidentally, start backend with `DB_FILE_MUST_EXIST=1`.
+- SQL query logging is controlled by env vars:
+  - `SQL_VERBOSE=1` → force-enable SQL logs.
+  - `SQL_VERBOSE=0` → force-disable SQL logs.
+  - otherwise, SQL logs are enabled only when `NODE_ENV != production`.
 - On each backend start, if `family-chat.db` exists, a timestamped backup is created under `backend/backups/` and only the latest 10 backups are kept.
 
 ## Login troubleshooting for existing accounts
@@ -135,7 +139,7 @@ A quick helper note is also available at `frontend/tool_bootstrap_platforms.md`.
 
 After backend + frontend are both running, normal indicators include:
 - Backend: `Server running on port 3000`
-- Backend: SQL logs for register/login/users/messages queries (verbose mode enabled)
+- Backend: SQL logs for register/login/users/messages queries **only when SQL logging is enabled**
 - Frontend: `Socket connected → user <id>`
 - Frontend: `Received newMessage: {...}` when messages arrive
 
@@ -145,6 +149,6 @@ If you see those, your REST + realtime flow is healthy.
 
 Current auth/storage is for demo use only:
 - Passwords are hashed, but historical plaintext rows (if any) are upgraded only after successful login.
-- SQL verbose logging can print sensitive values during development (including user emails and query text).
+- SQL verbose logging can print sensitive values (including user emails and query text); keep `SQL_VERBOSE=0` in production.
 
 Do **not** deploy this as-is to production.
