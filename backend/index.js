@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const Database = require('better-sqlite3');  // < new import
+const bcrypt = require('bcrypt');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,6 +14,8 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
+
+const BCRYPT_SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS || 12);
 
 // Open DB (creates file if missing)
 const db = new Database('./family-chat.db', { verbose: console.log });  // verbose = logs queries (good for debug)
@@ -25,7 +28,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,          -- TODO: hash this in production!
+    password TEXT NOT NULL,
     name TEXT
   )
 `);
@@ -50,8 +53,9 @@ app.post('/register', (req, res) => {
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (existing) return res.status(400).json({ error: 'Email already taken' });
 
+    const passwordHash = bcrypt.hashSync(password, BCRYPT_SALT_ROUNDS);
     const stmt = db.prepare('INSERT INTO users (email, password, name) VALUES (?, ?, ?)');
-    const info = stmt.run(email, password, name || email.split('@')[0]);
+    const info = stmt.run(email, passwordHash, name || email.split('@')[0]);
 
     res.json({ id: info.lastInsertRowid, email, name: name || email.split('@')[0] });
   } catch (err) {
@@ -63,8 +67,26 @@ app.post('/register', (req, res) => {
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
   try {
-    const user = db.prepare('SELECT * FROM users WHERE email = ? AND password = ?').get(email, password);
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+
+    const storedPassword = user.password || '';
+    const looksHashed = /^\$2[aby]\$\d{2}\$/.test(storedPassword);
+    let isValidPassword = false;
+
+    if (looksHashed) {
+      isValidPassword = bcrypt.compareSync(password, storedPassword);
+    } else {
+      // Backward compatibility with old plaintext rows; migrate to hash on successful login.
+      isValidPassword = storedPassword === password;
+      if (isValidPassword) {
+        const upgradedHash = bcrypt.hashSync(password, BCRYPT_SALT_ROUNDS);
+        db.prepare('UPDATE users SET password = ? WHERE id = ?').run(upgradedHash, user.id);
+      }
+    }
+
+    if (!isValidPassword) return res.status(401).json({ error: 'Invalid email or password' });
+
     res.json({ id: user.id, email: user.email, name: user.name });
   } catch (err) {
     res.status(500).json({ error: err.message });
