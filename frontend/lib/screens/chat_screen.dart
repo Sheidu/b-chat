@@ -91,12 +91,17 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty || _currentUserId == null) return;
     final clientToken = _nextClientToken();
 
-    _socketService.sendMessage(
+    final sent = _socketService.sendMessage(
       fromId: _currentUserId!,
       toId: _otherUserId,
       text: text,
       clientToken: clientToken,
     );
+
+    if (!sent) {
+      debugPrint('Message not sent because socket is disconnected.');
+      return;
+    }
 
     // Optimistic UI update
     setState(() {
