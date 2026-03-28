@@ -127,7 +127,13 @@ app.post('/register', (req, res) => {
 
 // Login
 app.post('/login', (req, res) => {
-  const { email, password } = req.body;
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
+  }
+
   try {
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });

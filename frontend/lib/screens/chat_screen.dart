@@ -73,9 +73,7 @@ class _ChatScreenState extends State<ChatScreen> {
             .toList();
 
         setState(() {
-          _messages
-            ..clear()
-            ..addAll(parsed);
+          _mergeFetchedHistory(parsed);
           _loadingHistory = false;
         });
       } else {
@@ -136,6 +134,13 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!alreadyPresent) {
       _messages.add(incoming);
     }
+  }
+
+  void _mergeFetchedHistory(List<Message> fetchedHistory) {
+    for (final message in fetchedHistory) {
+      _upsertIncomingMessage(message);
+    }
+    _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
   }
 
   String _nextClientToken() {
