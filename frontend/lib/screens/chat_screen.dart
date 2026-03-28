@@ -47,7 +47,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       setState(() {
-        _messages.add(message);
+        _upsertIncomingMessage(message);
       });
     });
 
@@ -108,6 +108,27 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     _messageController.clear();
+  }
+
+  void _upsertIncomingMessage(Message incoming) {
+    // Replace matching optimistic message from current user once server echoes it
+    final optimisticIndex = _messages.lastIndexWhere((existing) {
+      if (existing.id != null) return false;
+      return existing.fromId == incoming.fromId &&
+          existing.toId == incoming.toId &&
+          existing.text == incoming.text;
+    });
+
+    if (optimisticIndex != -1) {
+      _messages[optimisticIndex] = incoming;
+      return;
+    }
+
+    final alreadyPresent = incoming.id != null &&
+        _messages.any((existing) => existing.id == incoming.id);
+    if (!alreadyPresent) {
+      _messages.add(incoming);
+    }
   }
 
   bool _isForCurrentConversation(Message message) {

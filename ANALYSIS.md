@@ -67,3 +67,27 @@ This analysis reflects both source review and your first successful local run lo
 2. Introduce typed `Message` model and parsing.
 3. De-duplicate sender-side optimistic + socket-delivered messages.
 4. Add basic automated checks (backend lint/test, Flutter analyze/test) to keep behavior stable.
+
+## Second-Run Analysis (provided logs, March 28, 2026)
+
+### Confirmed healthy behavior
+1. Backend startup and schema checks are normal (`journal_mode=WAL`, `CREATE TABLE IF NOT EXISTS ...`).
+2. Password migration path worked for a legacy/plaintext user:
+   - `SELECT * FROM users WHERE email = 'bovkunalex@mail.ru'`
+   - `UPDATE users SET password = '<bcrypt hash>' WHERE id = 2`
+3. User list and conversation history queries succeeded.
+4. Socket session worked end-to-end:
+   - Connect
+   - Message insert
+   - Frontend receipt of `newMessage`
+
+### Notable log details
+- Values like `2.0` in SQLite write logs are benign numeric formatting from the JS↔SQLite boundary.
+- `/*+28 bytes*/` inside the printed hash value is `better-sqlite3` query-log truncation and does **not** mean the stored hash is corrupted.
+- `Lost connection to device.` appears after Flutter reports successful runtime activity and commonly indicates the desktop app/process was closed or detached, not necessarily a backend/socket failure.
+
+### Likely UX issue observed
+- Sender-side duplicate bubble risk still existed in this run pattern:
+  - Client adds optimistic message immediately.
+  - Server broadcasts same message back via `newMessage`.
+  - Without reconciliation, the sender can see duplicates.
