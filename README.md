@@ -71,3 +71,22 @@ flutter run -d <your-android-device-id>
 ```
 
 A quick helper note is also available at `frontend/tool_bootstrap_platforms.md`.
+
+## 6) First run: expected logs (based on a successful run)
+
+If everything is wired correctly, you should typically see:
+
+- **Backend**
+  - `Server running on port 3000`
+  - SQL statements printed in terminal (because SQLite is opened with `verbose: console.log`).
+  - `User connected: <socket_id>` when chat screen opens.
+
+- **Frontend (Windows/desktop)**
+  - `Socket connected → user <id>`
+  - `Received newMessage: {...}` after sending/receiving chat messages.
+
+## 7) Known current limitations
+
+- Passwords are currently stored and validated in plaintext (demo-only behavior).
+- Sender can see duplicate bubbles in some cases due to optimistic UI append + socket echo from server.
+- `backend/node_modules/` and SQLite DB files are currently present in the repository; this should be cleaned up before production use.
