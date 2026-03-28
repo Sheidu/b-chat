@@ -145,6 +145,13 @@ After backend + frontend are both running, normal indicators include:
 
 If you see those, your REST + realtime flow is healthy.
 
+
+## Deployment and capacity planning
+
+For infrastructure sizing, browser deployment, and Android packaging guidance, see:
+
+- `DEPLOYMENT_AND_CAPACITY_GUIDE.md`
+
 ## 7) Security note
 
 Current auth/storage is for demo use only:
