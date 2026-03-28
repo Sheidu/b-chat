@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -23,6 +24,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _loadingHistory = true;
   late SocketService _socketService;
   int? _currentUserId;
+  int _clientTokenCounter = 0;
 
   int get _otherUserId => _parseUserId(widget.otherUser['id']);
 
@@ -89,11 +91,13 @@ class _ChatScreenState extends State<ChatScreen> {
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty || _currentUserId == null) return;
+    final clientToken = _nextClientToken();
 
     _socketService.sendMessage(
       fromId: _currentUserId!,
       toId: _otherUserId,
       text: text,
+      clientToken: clientToken,
     );
 
     // Optimistic UI update
@@ -103,6 +107,7 @@ class _ChatScreenState extends State<ChatScreen> {
           fromId: _currentUserId!,
           toId: _otherUserId,
           text: text,
+          clientToken: clientToken,
         ),
       );
     });
@@ -111,13 +116,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _upsertIncomingMessage(Message incoming) {
-    // Replace matching optimistic message from current user once server echoes it
-    final optimisticIndex = _messages.lastIndexWhere((existing) {
-      if (existing.id != null) return false;
-      return existing.fromId == incoming.fromId &&
-          existing.toId == incoming.toId &&
-          existing.text == incoming.text;
-    });
+    // Prefer deterministic optimistic reconciliation via client token.
+    final optimisticIndex = incoming.clientToken == null
+        ? -1
+        : _messages.lastIndexWhere(
+            (existing) =>
+                existing.id == null &&
+                existing.clientToken != null &&
+                existing.clientToken == incoming.clientToken,
+          );
 
     if (optimisticIndex != -1) {
       _messages[optimisticIndex] = incoming;
@@ -129,6 +136,13 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!alreadyPresent) {
       _messages.add(incoming);
     }
+  }
+
+  String _nextClientToken() {
+    final nowMicros = DateTime.now().toUtc().microsecondsSinceEpoch;
+    final randomPart = Random.secure().nextInt(1 << 32).toRadixString(16);
+    final counterPart = (_clientTokenCounter++).toRadixString(16);
+    return '${_currentUserId}_${nowMicros}_${counterPart}_${randomPart}';
   }
 
   bool _isForCurrentConversation(Message message) {
