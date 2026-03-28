@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 
 class AuthProvider with ChangeNotifier {
   Map<String, dynamic>? _user; // {id, email, name}
@@ -12,8 +13,7 @@ class AuthProvider with ChangeNotifier {
   String? get error => _error;
   bool get isLoggedIn => _user != null;
 
-  final String baseUrl = 'http://10.0.2.2:3000'; // Android emulator → localhost
-  // Use 'http://192.168.x.x:3000' when testing on real phone (your PC IP)
+  String get baseUrl => AppConfig.baseUrl;
 
   Future<bool> register(String email, String password, String name) async {
     _isLoading = true;
