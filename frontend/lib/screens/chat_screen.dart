@@ -1,8 +1,11 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';         // your auth provider
+
+import '../models/messages.dart';
+import '../providers/auth_provider.dart';
 import '../services/socket_service.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -16,16 +19,18 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
-  final List<Map<String, dynamic>> _messages = [];
+  final List<Message> _messages = [];
   bool _loadingHistory = true;
   late SocketService _socketService;
   int? _currentUserId;
+
+  int get _otherUserId => _parseUserId(widget.otherUser['id']);
 
   @override
   void initState() {
     super.initState();
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    _currentUserId = auth.user?['id'];
+    _currentUserId = _parseOptionalUserId(auth.user?['id']);
 
     if (_currentUserId == null) {
       Navigator.pop(context);
@@ -34,13 +39,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _socketService = SocketService();
     _socketService.connect(_currentUserId!);
-    _socketService.listenNewMessages((data) {
+    _socketService.listenNewMessages((message) {
       if (!mounted) return;
+
+      if (!_isForCurrentConversation(message)) {
+        return;
+      }
+
       setState(() {
-        _messages.add({
-          ...data,
-          'isMe': data['from_id'] == _currentUserId,
-        });
+        _messages.add(message);
       });
     });
 
@@ -52,23 +59,26 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final uri = Uri.parse(
-        '${SocketService.baseUrl}/messages/$_currentUserId/${widget.otherUser['id']}',
+        '${SocketService.baseUrl}/messages/$_currentUserId/$_otherUserId',
       );
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        final parsed = data
+            .whereType<Map>()
+            .map((raw) => Message.fromJson(Map<String, dynamic>.from(raw)))
+            .toList();
+
         setState(() {
-          _messages.addAll(
-            data.map((m) => {
-                  ...m,
-                  'isMe': m['from_id'] == _currentUserId,
-                }),
-          );
+          _messages
+            ..clear()
+            ..addAll(parsed);
           _loadingHistory = false;
         });
       } else {
         debugPrint('History load failed: ${response.body}');
+        setState(() => _loadingHistory = false);
       }
     } catch (e) {
       debugPrint('History error: $e');
@@ -82,21 +92,49 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _socketService.sendMessage(
       fromId: _currentUserId!,
-      toId: widget.otherUser['id'],
+      toId: _otherUserId,
       text: text,
     );
 
     // Optimistic UI update
     setState(() {
-      _messages.add({
-        'from_id': _currentUserId,
-        'text': text,
-        'timestamp': DateTime.now().toIso8601String(),
-        'isMe': true,
-      });
+      _messages.add(
+        Message.optimistic(
+          fromId: _currentUserId!,
+          toId: _otherUserId,
+          text: text,
+        ),
+      );
     });
 
     _messageController.clear();
+  }
+
+  bool _isForCurrentConversation(Message message) {
+    if (_currentUserId == null) return false;
+
+    final sentByCurrentUser =
+        message.fromId == _currentUserId && message.toId == _otherUserId;
+    final receivedFromSelectedUser =
+        message.fromId == _otherUserId && message.toId == _currentUserId;
+
+    return sentByCurrentUser || receivedFromSelectedUser;
+  }
+
+  int _parseUserId(dynamic rawId) {
+    final parsed = _parseOptionalUserId(rawId);
+    if (parsed == null) {
+      throw const FormatException('Invalid conversation user id');
+    }
+    return parsed;
+  }
+
+  int? _parseOptionalUserId(dynamic rawId) {
+    if (rawId == null) return null;
+    if (rawId is int) return rawId;
+    if (rawId is num) return rawId.toInt();
+    if (rawId is String) return int.tryParse(rawId);
+    return null;
   }
 
   @override
@@ -127,20 +165,29 @@ class _ChatScreenState extends State<ChatScreen> {
                 itemCount: _messages.length,
                 itemBuilder: (context, index) {
                   final msg = _messages[_messages.length - 1 - index];
-                  final isMe = msg['isMe'] == true;
+                  final isMe = msg.isSentBy(_currentUserId ?? -1);
 
                   return Align(
-                    alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                    alignment:
+                        isMe ? Alignment.centerRight : Alignment.centerLeft,
                     child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      margin: const EdgeInsets.symmetric(
+                        vertical: 4,
+                        horizontal: 8,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: isMe ? Colors.blue[100] : Colors.grey[300],
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Text(
-                        msg['text'] ?? '',
-                        style: TextStyle(color: isMe ? Colors.blue[900] : Colors.black87),
+                        msg.text,
+                        style: TextStyle(
+                          color: isMe ? Colors.blue[900] : Colors.black87,
+                        ),
                       ),
                     ),
                   );
@@ -156,8 +203,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     controller: _messageController,
                     decoration: InputDecoration(
                       hintText: 'Type a message...',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),

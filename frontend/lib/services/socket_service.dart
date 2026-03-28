@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../config/app_config.dart';
+import '../models/messages.dart';
 
 class SocketService with ChangeNotifier {
   IO.Socket? _socket;
@@ -64,10 +65,19 @@ class SocketService with ChangeNotifier {
     });
   }
 
-  void listenNewMessages(void Function(dynamic data) callback) {
+  void listenNewMessages(void Function(Message message) callback) {
     _socket?.on('newMessage', (data) {
       debugPrint('Received newMessage: $data');
-      callback(data);
+      if (data is! Map) {
+        debugPrint('Ignoring malformed newMessage payload: $data');
+        return;
+      }
+
+      try {
+        callback(Message.fromJson(Map<String, dynamic>.from(data)));
+      } on FormatException catch (err) {
+        debugPrint('Ignoring invalid newMessage payload: $err');
+      }
     });
   }
 
