@@ -52,6 +52,7 @@ class SocketService with ChangeNotifier {
     required int fromId,
     required int toId,
     required String text,
+    required String clientToken,
   }) {
     if (!isConnected || _socket == null) {
       debugPrint('Cannot send: not connected');
@@ -62,6 +63,7 @@ class SocketService with ChangeNotifier {
       'from': fromId,
       'to': toId,
       'text': text,
+      'clientToken': clientToken,
     });
   }
 

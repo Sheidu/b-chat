@@ -1,10 +1,29 @@
-require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const Database = require('better-sqlite3');  // < new import
 const bcrypt = require('bcrypt');
+
+const envPath = path.join(__dirname, '.env');
+const envExamplePath = path.join(__dirname, '.env.example');
+
+if (!fs.existsSync(envPath)) {
+  if (fs.existsSync(envExamplePath)) {
+    try {
+      fs.copyFileSync(envExamplePath, envPath);
+      console.log('.env created from .env.example. Please update secrets!');
+    } catch (_err) {
+      console.log('No .env and no .env.example found');
+    }
+  } else {
+    console.log('No .env and no .env.example found');
+  }
+}
+
+require('dotenv').config({ path: envPath });
 
 const app = express();
 const server = http.createServer(app);
@@ -18,7 +37,43 @@ app.use(express.json());
 const BCRYPT_SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS || 12);
 
 // Open DB (creates file if missing)
-const db = new Database('./family-chat.db', { verbose: console.log });  // verbose = logs queries (good for debug)
+const dbPath = path.join(__dirname, 'family-chat.db');
+const backupsDir = path.join(__dirname, 'backups');
+
+function createDbBackupIfExists() {
+  if (!fs.existsSync(dbPath)) return;
+
+  fs.mkdirSync(backupsDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(backupsDir, `family-chat-${timestamp}.db`);
+  fs.copyFileSync(dbPath, backupPath);
+
+  const backupFiles = fs.readdirSync(backupsDir)
+    .filter((fileName) => /^family-chat-.*\.db$/.test(fileName))
+    .map((fileName) => {
+      const filePath = path.join(backupsDir, fileName);
+      const stats = fs.statSync(filePath);
+      return { filePath, modifiedTimeMs: stats.mtimeMs };
+    })
+    .sort((a, b) => b.modifiedTimeMs - a.modifiedTimeMs);
+
+  for (const oldBackup of backupFiles.slice(10)) {
+    fs.unlinkSync(oldBackup.filePath);
+  }
+}
+
+createDbBackupIfExists();
+
+const dbExistedBeforeStart = fs.existsSync(dbPath);
+const requireExistingDb = process.env.DB_FILE_MUST_EXIST === '1';
+const db = new Database(dbPath, {
+  verbose: console.log, // verbose = logs queries (good for debug)
+  fileMustExist: requireExistingDb,
+});
+
+if (!dbExistedBeforeStart) {
+  console.warn(`[DB] Created new SQLite file at ${dbPath}`);
+}
 
 // Enable WAL mode right away > much better concurrency/performance for reads+writes
 db.pragma('journal_mode = WAL');
@@ -39,9 +94,16 @@ db.exec(`
     from_id INTEGER NOT NULL,
     to_id INTEGER NOT NULL,
     text TEXT NOT NULL,
+    client_token TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
+
+const messageColumns = db.prepare(`PRAGMA table_info(messages)`).all();
+const hasClientTokenColumn = messageColumns.some((column) => column.name === 'client_token');
+if (!hasClientTokenColumn) {
+  db.exec('ALTER TABLE messages ADD COLUMN client_token TEXT');
+}
 
 // Register > synchronous prepare + run
 app.post('/register', (req, res) => {
@@ -127,16 +189,22 @@ io.on('connection', (socket) => {
   });
 
   socket.on('sendMessage', (data) => {
-    const { from, to, text } = data;
+    const { from, to, text, clientToken } = data;
     try {
-      const stmt = db.prepare('INSERT INTO messages (from_id, to_id, text) VALUES (?, ?, ?)');
-      const info = stmt.run(from, to, text);
+      const normalizedClientToken =
+        typeof clientToken === 'string' && clientToken.trim() !== ''
+          ? clientToken.trim()
+          : null;
+
+      const stmt = db.prepare('INSERT INTO messages (from_id, to_id, text, client_token) VALUES (?, ?, ?, ?)');
+      const info = stmt.run(from, to, text, normalizedClientToken);
 
       const newMsg = {
         id: info.lastInsertRowid,
         from_id: from,
         to_id: to,
         text,
+        client_token: normalizedClientToken,
         timestamp: new Date().toISOString()
       };
 

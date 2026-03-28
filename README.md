@@ -14,6 +14,12 @@ npm start
 
 Backend runs on `http://localhost:3000` by default.
 
+If `backend/.env` is missing, backend will auto-create it from `backend/.env.example` and print:
+
+```text
+.env created from .env.example. Please update secrets!
+```
+
 ## 2) Start the Flutter frontend
 
 In a second terminal:
@@ -46,8 +52,61 @@ Use your machine's LAN IP (example `http://192.168.1.25:3000`) when testing from
 
 ## Notes
 
-- SQLite database file is created in `backend/family-chat.db` when backend starts.
+- SQLite database file is always `backend/family-chat.db` (resolved from backend `index.js` directory, not your terminal working directory).
 - Passwords are hashed with `bcrypt` on registration (`BCRYPT_SALT_ROUNDS`, default `12`).
+- Adding `client_token` uses `ALTER TABLE ... ADD COLUMN` migration logic and **does not clear existing rows**.
+- `new Database(dbPath, ...)` does **not** wipe an existing file, but it will create a new DB file if one does not exist.
+- To fail fast instead of creating a new DB file accidentally, start backend with `DB_FILE_MUST_EXIST=1`.
+- On each backend start, if `family-chat.db` exists, a timestamped backup is created under `backend/backups/` and only the latest 10 backups are kept.
+
+## Login troubleshooting for existing accounts
+
+If existing users suddenly cannot log in (`Invalid email or password`), first verify backend is reading the expected DB file and that users still exist.
+
+From repo root (works on Windows CMD/PowerShell and bash):
+
+```bash
+cd backend
+node scripts/db_inspect.js tables
+```
+
+If `users` is present, list users:
+
+```bash
+cd backend
+node scripts/db_inspect.js users
+```
+
+You can also inspect message count:
+
+```bash
+cd backend
+node scripts/db_inspect.js messages
+```
+
+If that first query returns an empty list, you are likely on a different/new DB file than expected.
+
+By default, `node scripts/db_inspect.js` prints a summary (`dbPath`, tables, and counts when available).
+
+When backend starts, if the DB file did not exist, it now logs:
+
+```text
+[DB] Created new SQLite file at <path>
+```
+
+If you want backend to error instead of creating a new DB file, run:
+
+```bash
+cd backend
+DB_FILE_MUST_EXIST=1 npm start
+```
+
+To search this repo for *all* `family-chat.db` files (to detect accidental duplicates):
+
+```bash
+cd backend
+node scripts/db_inspect.js find
+```
 
 ## 5) If Flutter says "No supported devices connected"
 
