@@ -1,16 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../config/app_config.dart';
 
 class SocketService with ChangeNotifier {
   IO.Socket? _socket;
   bool get isConnected => _socket?.connected ?? false;
 
-  // Change this based on where you test:
-  // - Android emulator: 'http://10.0.2.2:3000'
-  // - Real phone (same Wi-Fi): 'http://192.168.1.xxx:3000'  your PC IP from ipconfig
-  // - Web (browser): 'http://localhost:3000'
-  static const String _baseUrl = 'http://localhost:3000'; // edit this!
-  static String get baseUrl => _baseUrl;
+  static String get baseUrl => AppConfig.baseUrl;
 
   void connect(int userId) {
     if (_socket != null) {
@@ -20,7 +16,7 @@ class SocketService with ChangeNotifier {
     }
 
     _socket = IO.io(
-      _baseUrl,
+      baseUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])          // force websocket (more reliable)
           .setExtraHeaders({'Connection': 'upgrade'})

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import '../config/app_config.dart';
 import '../providers/auth_provider.dart';
-import '../services/socket_service.dart';
 import 'chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchUsers() async {
     try {
       final response = await http.get(
-        Uri.parse('http://10.0.2.2:3000/users'), // ← change to your correct base URL
+        Uri.parse('${AppConfig.baseUrl}/users'),
       );
 
       if (response.statusCode == 200) {
@@ -61,7 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              Provider.of<SocketService>(context, listen: false).dispose(); // cleanup socket
               auth.logout();
             },
           ),
