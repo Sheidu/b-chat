@@ -47,7 +47,7 @@ Use your machine's LAN IP (example `http://192.168.1.25:3000`) when testing from
 ## Notes
 
 - SQLite database file is created in `backend/family-chat.db` when backend starts.
-- Current auth is demo-level (plain password matching in DB).
+- Passwords are hashed with `bcrypt` on registration (`BCRYPT_SALT_ROUNDS`, default `12`).
 
 ## 5) If Flutter says "No supported devices connected"
 
@@ -71,3 +71,21 @@ flutter run -d <your-android-device-id>
 ```
 
 A quick helper note is also available at `frontend/tool_bootstrap_platforms.md`.
+
+## 6) First-run expected logs
+
+After backend + frontend are both running, normal indicators include:
+- Backend: `Server running on port 3000`
+- Backend: SQL logs for register/login/users/messages queries (verbose mode enabled)
+- Frontend: `Socket connected → user <id>`
+- Frontend: `Received newMessage: {...}` when messages arrive
+
+If you see those, your REST + realtime flow is healthy.
+
+## 7) Security note
+
+Current auth/storage is for demo use only:
+- Passwords are hashed, but historical plaintext rows (if any) are upgraded only after successful login.
+- SQL verbose logging can print sensitive values during development (including user emails and query text).
+
+Do **not** deploy this as-is to production.

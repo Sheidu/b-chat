@@ -1,62 +1,69 @@
-# Repository Analysis
+# Repository Analysis (Updated March 28, 2026)
 
-## Overview
-This repository contains a full-stack family chat app with:
-- A Node.js/Express + Socket.IO backend backed by SQLite (`backend/`).
-- A Flutter frontend using Provider for auth state and Socket.IO client for real-time chat (`frontend/`).
+## Scope
+This analysis reflects both source review and your first successful local run logs for:
+- Backend (`npm start`)
+- Frontend (`flutter run -d windows`)
 
-## Backend Architecture (`backend/`)
-- `index.js` starts an Express HTTP server and attaches a Socket.IO server.
-- SQLite is opened through `better-sqlite3` with WAL mode enabled.
-- Tables are created at startup for `users` and `messages`.
-- REST endpoints:
+## Current Architecture
+
+### Backend (`backend/`)
+- Stack: Express + Socket.IO + SQLite (`better-sqlite3`).
+- DB initializes on startup and enables WAL mode.
+- API routes:
   - `POST /register`
   - `POST /login`
   - `GET /users`
   - `GET /messages/:fromId/:toId`
 - Socket events:
-  - `join` to subscribe a user socket to `user_<id>` room.
-  - `sendMessage` to store and broadcast new messages.
+  - `join`
+  - `sendMessage`
 
-## Frontend Architecture (`frontend/`)
-- `main.dart` boots app with `ChangeNotifierProvider<AuthProvider>`.
-- `AuthProvider` performs register/login HTTP calls and tracks auth state.
-- Screen flow:
-  - `LoginScreen`
-  - `RegisterScreen`
-  - `HomeScreen` (contacts)
-  - `ChatScreen` (history + live updates)
-- `SocketService` wraps socket connection and message send/listen behavior.
+### Frontend (`frontend/`)
+- Flutter app with Provider-based auth state (`AuthProvider`).
+- API base URL is centralized in `AppConfig` and can be overridden via:
+  - `--dart-define=CHAT_API_BASE_URL=http://<host>:3000`
+- Main screens:
+  - Login
+  - Register
+  - Contacts/Home
+  - Chat
 
-## Key Findings
-1. **Password storage is insecure**
-   - Passwords are stored in plaintext and compared directly in SQL queries.
-   - `bcrypt` is listed in dependencies but not used.
+## First-Run Validation (from provided logs)
 
-2. **Inconsistent backend base URL usage in Flutter**
-   - `AuthProvider` and `HomeScreen` use `http://10.0.2.2:3000` (Android emulator).
-   - `SocketService` is hardcoded to `http://localhost:3000`.
-   - This can break chat connectivity depending on platform/environment.
+### What worked
+1. **Backend booted correctly** on port `3000` and created/validated tables.
+2. **Registration worked** (`INSERT INTO users ...`).
+3. **Login worked** (`SELECT * FROM users WHERE email = ? AND password = ?`).
+4. **Users list loaded** (`SELECT id, email, name FROM users`).
+5. **Message history query worked** (`GET /messages/:fromId/:toId`).
+6. **Realtime transport worked**:
+   - Socket connected.
+   - `sendMessage` persisted messages.
+   - Frontend received `newMessage` events.
 
-3. **Missing model implementation**
-   - `frontend/lib/models/messages.dart` exists but is empty.
-   - Message data is handled as untyped maps throughout UI.
+### Observations worth documenting
+- Query logging is enabled with SQLite `verbose: console.log`, so SQL statements are printed during runtime.
+- The frontend run demonstrates cross-layer integration is functional (auth + history + live messages).
+- IDs in `sendMessage` inserts appear as `2.0`/`1.0` in logs; this is acceptable in SQLite, but can be normalized later if desired.
 
-4. **Provider wiring risk**
-   - `HomeScreen` calls `Provider.of<SocketService>(context, ...)` on logout.
-   - `main.dart` only provides `AuthProvider`, so this may throw at runtime unless another provider is added elsewhere.
+## Remaining Risks / Tech Debt
+1. **Verbose SQL logs may expose sensitive fields in development output**
+   - Useful for debugging, but avoid in production.
 
-5. **Data and dependency artifacts committed**
-   - SQLite DB files (`family-chat.db`, `-wal`, `-shm`) and `node_modules/` are present in repo.
-   - This inflates repository size and risks environment-specific state leaking into source control.
+2. **Untyped message model**
+   - `frontend/lib/models/messages.dart` is currently empty; UI uses dynamic maps.
 
-6. **Package metadata is minimal**
-   - Frontend `pubspec.yaml` has only bare dependencies and no Flutter project metadata sections.
+3. **Duplicate-chat-message UX risk**
+   - Chat screen uses optimistic UI append and also listens to server broadcast,
+     which can lead to temporary duplicates for sender messages.
 
-## Suggested Next Improvements
-1. Hash passwords with bcrypt on registration and validate with bcrypt compare on login.
-2. Centralize API/socket base URL configuration by platform/env.
-3. Add typed models (`User`, `Message`) and parse JSON into model objects.
-4. Fix provider setup for `SocketService` (or avoid provider access in `HomeScreen`).
-5. Update `.gitignore` and remove DB/runtime artifacts and `node_modules` from versioned files.
-6. Add lint/test scripts for backend and frontend.
+4. **Password migration edge case handling**
+   - New registrations are bcrypt-hashed.
+   - Legacy plaintext rows are only upgraded when users successfully log in.
+
+## Recommended Next Steps (priority order)
+1. Disable or gate SQL verbose logging by environment.
+2. Introduce typed `Message` model and parsing.
+3. De-duplicate sender-side optimistic + socket-delivered messages.
+4. Add basic automated checks (backend lint/test, Flutter analyze/test) to keep behavior stable.
