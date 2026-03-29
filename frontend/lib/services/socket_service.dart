@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../config/app_config.dart';
 import '../models/messages.dart';
 
 class SocketService with ChangeNotifier {
-  IO.Socket? _socket;
+  io.Socket? _socket;
   bool get isConnected => _socket?.connected ?? false;
 
   static String get baseUrl => AppConfig.baseUrl;
@@ -16,9 +16,9 @@ class SocketService with ChangeNotifier {
       return;
     }
 
-    _socket = IO.io(
+    _socket = io.io(
       baseUrl,
-      IO.OptionBuilder()
+      io.OptionBuilder()
           .setTransports(['websocket'])          // force websocket (more reliable)
           .setExtraHeaders({'Connection': 'upgrade'})
           .enableForceNew()                      // avoid session reuse issues
@@ -84,9 +84,15 @@ class SocketService with ChangeNotifier {
     });
   }
 
+  void listenUsersChanged(VoidCallback callback) {
+    _socket?.off('usersChanged');
+    _socket?.on('usersChanged', (_) => callback());
+  }
+
   @override
   void dispose() {
     _socket?.off('newMessage');
+    _socket?.off('usersChanged');
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;

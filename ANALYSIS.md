@@ -1,4 +1,4 @@
-# Repository Analysis (Updated March 28, 2026)
+# Repository Analysis (Updated March 29, 2026)
 
 ## Scope
 This analysis reflects both source review and your first successful local run logs for:
@@ -9,7 +9,17 @@ This analysis reflects both source review and your first successful local run lo
 
 ### Backend (`backend/`)
 - Stack: Express + Socket.IO + SQLite (`better-sqlite3`).
-- DB initializes on startup and enables WAL mode.
+- Entry point (`index.js`) is composition-only:
+  - env/bootstrap
+  - DB connection + backup rotation (`db/connection.js`)
+  - DB migration execution (`db/migrations.js`)
+  - repository/service construction
+  - Express app + HTTP server + socket handler registration
+- Layered modules:
+  - `routes/*.routes.js` (thin HTTP handlers)
+  - `services/*.service.js` (validation/business rules/DTO shaping)
+  - `repositories/*.repository.js` (all raw SQL with prepared statements)
+  - `sockets/chat.socket.js` (Socket.IO event wiring)
 - API routes:
   - `POST /register`
   - `POST /login`
@@ -18,6 +28,8 @@ This analysis reflects both source review and your first successful local run lo
 - Socket events:
   - `join`
   - `sendMessage`
+  - server emits `usersChanged` after successful registration
+  - server emits `newMessage` after message persist
 
 ### Frontend (`frontend/`)
 - Flutter app with Provider-based auth state (`AuthProvider`).
@@ -48,27 +60,43 @@ This analysis reflects both source review and your first successful local run lo
 - IDs in `sendMessage` inserts appear as `2.0`/`1.0` in logs; this is acceptable in SQLite, but can be normalized later if desired.
 
 ## Remaining Risks / Tech Debt
-1. **Verbose SQL logs may expose sensitive fields in development output**
-   - Useful for debugging, but avoid in production.
+1. **Message and user payload validation is still uneven**
+   - Core message parsing is typed, but broader API/socket payload validation can be expanded.
 
-2. **Untyped message model**
-   - `frontend/lib/models/messages.dart` is currently empty; UI uses dynamic maps.
+2. **Conversation ordering edge cases**
+   - History merge + realtime updates are reconciled, but tie-breaking strategy for identical timestamps should be explicitly tested.
 
-3. **Duplicate-chat-message UX risk**
-   - Chat screen uses optimistic UI append and also listens to server broadcast,
-     which can lead to temporary duplicates for sender messages.
-
-4. **Password migration edge case handling**
+3. **Password migration edge case handling**
    - New registrations are bcrypt-hashed.
    - Legacy plaintext rows are only upgraded when users successfully log in.
 
-## Recommended Next Steps (priority order)
-1. Disable or gate SQL verbose logging by environment.
-2. Introduce typed `Message` model and parsing.
-3. De-duplicate sender-side optimistic + socket-delivered messages.
-4. Add basic automated checks (backend lint/test, Flutter analyze/test) to keep behavior stable.
+4. **Backend test coverage is still minimal**
+   - Initial service/repository unit tests exist, but API-level and edge-case coverage should be expanded.
 
-## Second-Run Analysis (provided logs, March 28, 2026)
+## Recently Resolved
+1. **SQL logging safety**
+   - SQL statement logging is now opt-in (`SQL_VERBOSE=1`) and disabled by default.
+
+## Recommended Next Steps (priority order)
+1. Add message delivery acknowledgements/retry for transient disconnects.
+2. Add API/service validation tests for malformed payloads and boundary cases.
+3. Add frontend widget/integration tests for conversation de-duplication UX.
+4. Add coverage reporting thresholds in CI for backend + frontend.
+5. Add production hardening checks (CORS allowlist, secure cookie/session strategy, secret rotation docs).
+
+## Backend Refactor Notes (March 29, 2026)
+
+### What improved
+1. SQL is no longer mixed into route handlers or socket handlers.
+2. Route modules became thin and are now easier to read/extend.
+3. Password and registration logic moved into `auth.service` and can be tested in isolation.
+4. Message persistence path moved behind repository + service.
+5. Socket policy is explicit in `chat.socket.js`.
+
+### Why this matters
+- Faster maintenance: smaller files with clear ownership.
+- Safer changes: DB access is centralized and easier to audit.
+- Easier testing: services can be tested with mocked repositories.
 
 ### Confirmed healthy behavior
 1. Backend startup and schema checks are normal (`journal_mode=WAL`, `CREATE TABLE IF NOT EXISTS ...`).

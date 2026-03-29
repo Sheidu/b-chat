@@ -90,24 +90,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 54,
                       child: ElevatedButton(
                         onPressed: () async {
-                          if (_formKey.currentState!.validate()) {
-                            final success = await auth.login(
-                              _emailController.text.trim(),
-                              _passwordController.text,
-                            );
-                            if (success) {
-                              // Navigation handled by main.dart Consumer or here:
-                              // Navigator.pushReplacementNamed(context, '/home');
-                            } else {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(auth.error ?? 'Login failed'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
+                          if (!_formKey.currentState!.validate()) return;
+                          final messenger = ScaffoldMessenger.of(context);
+
+                          final success = await auth.login(
+                            _emailController.text.trim(),
+                            _passwordController.text,
+                          );
+
+                          if (success) {
+                            // Navigation handled by main.dart Consumer or here:
+                            // Navigator.pushReplacementNamed(context, '/home');
+                            return;
                           }
+
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(auth.error ?? 'Login failed'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -9,6 +9,12 @@ This document answers practical planning questions for running **b-chat** for ab
 - The app currently stores users and text messages in SQLite (`backend/family-chat.db`).
 - Messages currently include only text (`messages.text`) plus metadata (`from_id`, `to_id`, `client_token`, `timestamp`).
 - There is no file/image/video blob column yet, and no object storage integration in current backend routes.
+- Backend runtime is layered:
+  - `index.js` bootstrap/composition
+  - `db/` for connection + migrations
+  - `repositories/` for SQL
+  - `services/` for business logic
+  - `routes/` and `sockets/` for transport
 
 Because of that, SQLite size today is mostly text + indexes and grows slowly for 20 users.
 
@@ -81,7 +87,7 @@ Planning recommendation with media enabled:
 ## Minimal production topology (good for 20 users)
 
 1. **Backend API + Socket.IO service**
-   - Node.js server running your `backend/index.js` app.
+   - Node.js server running your `backend/index.js` bootstrap (which composes `app.js`, DB modules, repositories, services, routes, and socket handlers).
    - Start with 1 small VM/container.
 
 2. **Database**
@@ -94,6 +100,7 @@ Planning recommendation with media enabled:
 4. **TLS + domain**
    - HTTPS for web.
    - WSS (secure websocket) for Socket.IO in production.
+   - Ensure websocket upgrade forwarding for `/socket.io`.
 
 5. **Object storage** (when attachments are introduced)
    - For image/video/file payloads.
