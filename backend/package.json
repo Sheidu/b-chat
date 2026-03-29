@@ -5,7 +5,9 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test",
+    "lint": "node --check index.js app.js db/connection.js db/migrations.js repositories/users.repository.js repositories/messages.repository.js routes/auth.routes.js routes/users.routes.js routes/messages.routes.js services/auth.service.js services/users.service.js services/messages.service.js sockets/chat.socket.js users.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

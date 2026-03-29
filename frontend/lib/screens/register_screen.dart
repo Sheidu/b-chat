@@ -97,28 +97,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       height: 54,
                       child: ElevatedButton(
                         onPressed: () async {
-                          if (_formKey.currentState!.validate()) {
-                            final success = await auth.register(
-                              _emailController.text.trim(),
-                              _passwordController.text,
-                              _nameController.text.trim(),
+                          if (!_formKey.currentState!.validate()) return;
+                          final messenger = ScaffoldMessenger.of(context);
+                          final navigator = Navigator.of(context);
+
+                          final success = await auth.register(
+                            _emailController.text.trim(),
+                            _passwordController.text,
+                            _nameController.text.trim(),
+                          );
+
+                          if (success) {
+                            messenger.showSnackBar(
+                              const SnackBar(content: Text('Account created! Please login')),
                             );
-                            if (success) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Account created! Please login')),
-                              );
-                              Navigator.pop(context);
-                            } else {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(auth.error ?? 'Registration failed'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
+                            navigator.pop();
+                            return;
                           }
+
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(auth.error ?? 'Registration failed'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

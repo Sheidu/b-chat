@@ -14,6 +14,19 @@ npm start
 
 Backend runs on `http://localhost:3000` by default.
 
+### Backend structure (current)
+
+`backend/index.js` is now only a composition/bootstrap entrypoint. It wires:
+
+- `app.js` (Express app + middleware)
+- `db/connection.js` and `db/migrations.js`
+- `routes/*.routes.js`
+- `services/*.service.js`
+- `repositories/*.repository.js`
+- `sockets/chat.socket.js`
+
+All raw SQL is centralized in `backend/repositories/`.
+
 If `backend/.env` is missing, backend will auto-create it from `backend/.env.example` and print:
 
 ```text
@@ -48,20 +61,36 @@ Use your machine's LAN IP (example `http://192.168.1.25:3000`) when testing from
 
 - Open two app instances/users and register both.
 - Confirm user list loads.
+- Keep one user logged in, register another user from a second instance, and verify contacts refresh automatically (server emits `usersChanged`, frontend re-fetches `/users`).
 - Send a message and confirm both sender + receiver see realtime updates.
+
+### Backend quality checks
+
+```bash
+cd backend
+npm test
+npm run lint
+```
+
+### CI checks
+
+GitHub Actions (`.github/workflows/ci.yml`) now runs:
+- Backend: `npm run lint` + `npm test`
+- Frontend: `flutter analyze` + `flutter test`
 
 ## Notes
 
 - SQLite database file is always `backend/family-chat.db` (resolved from backend `index.js` directory, not your terminal working directory).
 - Passwords are hashed with `bcrypt` on registration (`BCRYPT_SALT_ROUNDS`, default `12`).
+- Login supports migration of historical plaintext passwords to bcrypt after a successful login.
 - Adding `client_token` uses `ALTER TABLE ... ADD COLUMN` migration logic and **does not clear existing rows**.
 - `new Database(dbPath, ...)` does **not** wipe an existing file, but it will create a new DB file if one does not exist.
 - To fail fast instead of creating a new DB file accidentally, start backend with `DB_FILE_MUST_EXIST=1`.
 - SQL query logging is controlled by env vars:
-  - `SQL_VERBOSE=1` → force-enable SQL logs.
-  - `SQL_VERBOSE=0` → force-disable SQL logs.
-  - otherwise, SQL logs are enabled only when `NODE_ENV != production`.
+  - `SQL_VERBOSE=1` → enable SQL logs.
+  - any other value (or unset) → SQL logs are disabled.
 - On each backend start, if `family-chat.db` exists, a timestamped backup is created under `backend/backups/` and only the latest 10 backups are kept.
+- Message SQL is handled by `backend/repositories/messages.repository.js`; user SQL is handled by `backend/repositories/users.repository.js`.
 
 ## Login troubleshooting for existing accounts
 

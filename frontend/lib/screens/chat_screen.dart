@@ -152,7 +152,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final nowMicros = DateTime.now().toUtc().microsecondsSinceEpoch;
     final randomPart = Random.secure().nextInt(1 << 32).toRadixString(16);
     final counterPart = (_clientTokenCounter++).toRadixString(16);
-    return '${_currentUserId}_${nowMicros}_${counterPart}_${randomPart}';
+    return '${_currentUserId}_${nowMicros}_${counterPart}_$randomPart';
   }
 
   bool _isForCurrentConversation(Message message) {
