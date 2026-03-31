@@ -8,6 +8,11 @@ class AppConfig {
     defaultValue: '',
   );
 
+  static const String _overrideUserAgreementUrl = String.fromEnvironment(
+    'CHAT_USER_AGREEMENT_URL',
+    defaultValue: '',
+  );
+
   static String get baseUrl {
     if (_overrideBaseUrl.isNotEmpty) return _overrideBaseUrl;
 
@@ -19,5 +24,10 @@ class AppConfig {
       default:
         return 'http://localhost:3000';
     }
+  }
+
+  static String get userAgreementUrl {
+    if (_overrideUserAgreementUrl.isNotEmpty) return _overrideUserAgreementUrl;
+    return 'https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie';
   }
 }

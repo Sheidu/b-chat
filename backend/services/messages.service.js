@@ -1,8 +1,14 @@
-function buildMessagesService({ messagesRepository }) {
+function buildMessagesService({ messagesRepository, messageCrypto }) {
   function listConversation(fromId, toId) {
+    const rows = messagesRepository.listMessagesBetweenUsers(fromId, toId);
+    const decrypted = rows.map((row) => ({
+      ...row,
+      text: messageCrypto ? messageCrypto.decryptText(row.text) : row.text,
+    }));
+
     return {
       status: 200,
-      body: messagesRepository.listMessagesBetweenUsers(fromId, toId),
+      body: decrypted,
     };
   }
 
@@ -12,7 +18,8 @@ function buildMessagesService({ messagesRepository }) {
         ? clientToken.trim()
         : null;
 
-    const info = messagesRepository.createMessage(from, to, text, normalizedClientToken);
+    const encryptedText = messageCrypto ? messageCrypto.encryptText(text) : text;
+    const info = messagesRepository.createMessage(from, to, encryptedText, normalizedClientToken);
 
     return {
       id: info.lastInsertRowid,

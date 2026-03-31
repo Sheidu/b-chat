@@ -119,3 +119,52 @@ This analysis reflects both source review and your first successful local run lo
   - Client adds optimistic message immediately.
   - Server broadcasts same message back via `newMessage`.
   - Without reconciliation, the sender can see duplicates.
+
+## Compliance Audit: Registration/Auth + Message Storage (March 31, 2026)
+
+### Legal baseline reviewed
+- Consultant hotdocs link provided in the task (`https://www.consultant.ru/law/hotdocs/81325.html`).
+  - Note: the public mirror behind that specific URL appears inconsistent and may now resolve to an unrelated hotdocs item in open search indexes.
+- Official publication card for Federal Law No. 406-FZ dated July 31, 2023 (`https://publication.pravo.gov.ru/document/0001202307310022`) introducing Russian user-authorization constraints for site owners.
+- Yandex article on website user agreement structure and acceptance mechanics (`https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie`, updated July 29, 2024).
+
+### Requirement 1: Email registration/login must comply with RU authorization rules
+Status: **NOT COMPLIANT**.
+
+Findings in code:
+1. Registration accepts any non-empty `email` and `password`; there is no check for RU domain or approved RU authorization method.
+2. Login also accepts arbitrary email values and validates only credentials.
+3. There is no support for alternative legally common RU auth channels (e.g., Gosuslugi/ESIA, RU operator phone, EBS, or approved domestic auth system).
+
+### Requirement 2: Mandatory acceptance of user agreement
+Status: **NOT COMPLIANT**.
+
+Findings in code:
+1. Registration UI has no checkbox/consent capture for user agreement acceptance.
+2. Backend registration contract has no `termsAccepted` field and stores no acceptance timestamp/version.
+3. No endpoint or DB field exists for consent audit trail (agreement version, accepted_at, ip/device metadata).
+
+### Questions answered from code review
+1. **Are messages stored somewhere?**
+   - Yes. Messages are persisted in SQLite table `messages` via `INSERT INTO messages (from_id, to_id, text, client_token)`.
+2. **Are stored messages encrypted or plain?**
+   - Plain text at application/database layer: message body is stored as `text TEXT NOT NULL` and written/read directly without encryption transform.
+   - Passwords are hashed with bcrypt, but this does not apply to message payloads.
+
+### Minimal remediation checklist
+1. Add registration policy enforcement in backend service:
+   - validate allowed auth channel for RU users;
+   - reject disallowed email identities where policy requires.
+2. Add mandatory terms acceptance in frontend + backend:
+   - `termsAccepted` boolean required at registration;
+   - persist agreement version + accepted timestamp in DB.
+3. Add compliance logging/audit fields for auth + consent events.
+4. Encrypt message content at rest (field-level encryption using managed key) if business/security policy requires confidentiality beyond filesystem controls.
+
+## Documentation update note (March 31, 2026)
+
+The repository docs now explicitly document:
+- where users can read the User Agreement text URL;
+- how to override that URL for production;
+- backend compliance env vars (`REGISTRATION_POLICY`, `TERMS_VERSION`, `MESSAGE_ENCRYPTION_KEY`);
+- compliance/audit tables and encrypted message storage behavior.

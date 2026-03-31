@@ -188,3 +188,45 @@ Current auth/storage is for demo use only:
 - SQL verbose logging can print sensitive values (including user emails and query text); keep `SQL_VERBOSE=0` in production.
 
 Do **not** deploy this as-is to production.
+
+## 8) Compliance-related configuration and User Agreement link
+
+### Where users can read the User Agreement text
+
+The app currently points users to:
+
+- `https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie`
+
+Frontend registration screen displays this URL. You can override it at build/run time:
+
+```bash
+flutter run --dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement
+```
+
+### Registration/auth compliance controls (backend)
+
+Backend now supports:
+
+- `REGISTRATION_POLICY` (default: `strict_ru_email`)
+  - In `strict_ru_email` mode, registration/login via email is limited to `.ru/.рф` domains.
+- `TERMS_VERSION` (default: `2026-03-31`)
+  - Stored with user consent metadata on successful registration.
+
+### Message encryption at rest
+
+Backend message text is encrypted in app layer before DB write (AES-256-GCM) and decrypted when reading.
+
+- `MESSAGE_ENCRYPTION_KEY`
+  - Provide a strong secret in production.
+  - If omitted, a development fallback key is used (not suitable for production).
+
+### Compliance audit logging
+
+Backend stores auth/consent audit events in `compliance_events` table, including:
+
+- event type (`register`/`login`)
+- status (`accepted`/`rejected`)
+- reason
+- IP address
+- User-Agent
+- timestamp

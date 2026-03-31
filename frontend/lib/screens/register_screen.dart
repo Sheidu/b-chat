@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../config/app_config.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -15,6 +16,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   bool _obscurePassword = true;
+  bool _termsAccepted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +89,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 16),
+
+                  CheckboxListTile(
+                    value: _termsAccepted,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text(
+                      'I accept the User Agreement',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Required to register an account',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    onChanged: (value) => setState(() => _termsAccepted = value == true),
+                  ),
+                  const SizedBox(height: 16),
+                  SelectableText(
+                    'User Agreement text: ${AppConfig.userAgreementUrl}',
+                    style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
 
                   if (auth.isLoading)
                     const CircularProgressIndicator()
@@ -98,6 +122,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: ElevatedButton(
                         onPressed: () async {
                           if (!_formKey.currentState!.validate()) return;
+                          if (!_termsAccepted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('You must accept the User Agreement'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
+
                           final messenger = ScaffoldMessenger.of(context);
                           final navigator = Navigator.of(context);
 
@@ -105,6 +139,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             _emailController.text.trim(),
                             _passwordController.text,
                             _nameController.text.trim(),
+                            termsAccepted: _termsAccepted,
+                            authChannel: 'email',
                           );
 
                           if (success) {
