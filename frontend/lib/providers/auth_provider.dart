@@ -15,7 +15,13 @@ class AuthProvider with ChangeNotifier {
 
   String get baseUrl => AppConfig.baseUrl;
 
-  Future<bool> register(String email, String password, String name) async {
+  Future<bool> register(
+    String email,
+    String password,
+    String name, {
+    required bool termsAccepted,
+    String authChannel = 'email',
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -28,6 +34,8 @@ class AuthProvider with ChangeNotifier {
           'email': email,
           'password': password,
           'name': name.isEmpty ? null : name,
+          'termsAccepted': termsAccepted,
+          'authChannel': authChannel,
         }),
       );
 

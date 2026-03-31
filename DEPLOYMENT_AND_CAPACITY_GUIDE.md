@@ -248,3 +248,25 @@ Output:
 - **Hosting:** one small backend VM + static web hosting + TLS is enough to start.
 - **Web access:** use Flutter web build + hosted backend URL.
 - **Android package:** use `flutter build apk` (testing) and `flutter build appbundle` (Play Store).
+
+## Compliance operations notes (registration/auth + consent)
+
+### User Agreement text source
+
+Default User Agreement URL presented in frontend registration:
+- `https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie`
+
+Override for production/legal hosting:
+- Flutter `--dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement`
+
+### Backend compliance settings
+
+- `REGISTRATION_POLICY` (`strict_ru_email` by default)
+- `TERMS_VERSION` (stored during registration with consent timestamp)
+- `MESSAGE_ENCRYPTION_KEY` (required to set securely in production)
+
+### Tables involved
+
+- `users`: `auth_channel`, `terms_version`, `terms_accepted_at`
+- `compliance_events`: auth/consent audit records (accepted/rejected + reason + request metadata)
+- `messages`: encrypted message payload in `text` column

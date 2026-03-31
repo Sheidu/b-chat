@@ -34,3 +34,16 @@ On successful connection and messaging you should see logs similar to:
 - `Received newMessage: {...}`
 
 These indicate realtime Socket.IO flow is working end-to-end.
+
+## User Agreement
+
+During registration, users must accept the User Agreement.
+
+Current default URL shown in UI:
+- `https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie`
+
+You can override it:
+
+```bash
+flutter run --dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement
+```
