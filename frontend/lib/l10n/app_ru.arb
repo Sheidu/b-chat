@@ -1,0 +1,90 @@
+{
+  "appName": "Семейный чат",
+  "loginTitle": "Войдите, чтобы продолжить",
+  "loginButton": "Войти",
+  "registerTitle": "Создать аккаунт",
+  "registerHeader": "Присоединяйтесь к семье",
+  "registerButton": "Создать аккаунт",
+  "emailLabel": "Электронная почта",
+  "emailHint": "Электронная почта",
+  "emailRequired": "Введите адрес электронной почты",
+  "emailInvalid": "Введите корректный адрес электронной почты",
+  "emailRuHint": "Для пользователей из РФ: требуются домены .ru или .рф",
+  "passwordLabel": "Пароль",
+  "passwordHint": "Пароль",
+  "passwordRequired": "Введите пароль",
+  "passwordMinLength": "Пароль должен содержать не менее 4 символов",
+  "passwordTooShort": "Пароль слишком короткий (мин. 4 символа)",
+  "nameLabel": "Имя (необязательно)",
+  "termsCheckboxLabel": "Я принимаю Пользовательское соглашение",
+  "termsCheckboxSubtitle": "Требуется для регистрации аккаунта",
+  "termsRequired": "Необходимо принять Пользовательское соглашение",
+  "termsViewLink": "Читать полное Пользовательское соглашение →",
+  "termsUrlDisplay": "🔗 {agreementUrl}",
+  "loginFailed": "Неверный email или пароль",
+  "registrationFailed": "Ошибка регистрации",
+  "registrationSuccess": "Аккаунт создан! Пожалуйста, войдите",
+  "noAccountPrompt": "Нет аккаунта? Зарегистрироваться",
+  "hasAccountPrompt": "Уже есть аккаунт? Войти",
+  "homeTitle": "Семья – {name}",
+  "logoutButton": "Выйти",
+  "loadingUsers": "Загрузка контактов...",
+  "loadUsersError": "Не удалось загрузить пользователей",
+  "networkError": "Ошибка сети: {error}",
+  "noUsersMessage": "Пока нет участников семьи. Пригласите кого-нибудь, чтобы начать чат!",
+  "retryButton": "Повторить",
+  "chatTitle": "Чат с {userName}",
+  "loadingMessages": "Загрузка сообщений...",
+  "chatHint": "Введите сообщение...",
+  "sendMessage": "Отправить сообщение",
+  "messageSendFailed": "Не удалось отправить. Проверьте соединение.",
+  "connectionLost": "Соединение потеряно. Повторное подключение...",
+  "noMessages": "Сообщений пока нет. Начните разговор!",
+  "connectionStatusConnected": "Подключено",
+  "connectionStatusConnecting": "Подключение...",
+  "connectionStatusDisconnected": "Отключено",
+  "connectionStatusError": "Ошибка соединения",
+  "genericError": "Произошла непредвиденная ошибка",
+  "complianceFooter": "Регистрация соответствует Федеральному закону № 406-ФЗ",
+  "cannotOpenLink": "Не удалось открыть ссылку. Скопируйте URL вручную.",
+  "emailDomainNotAllowed": "Домен электронной почты не разрешён для регистрации",
+  "@appName": {
+    "description": "Название приложения в заголовке"
+  },
+  "@homeTitle": {
+    "description": "Заголовок главного экрана с именем пользователя",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Александр"
+      }
+    }
+  },
+  "@networkError": {
+    "description": "Сообщение об ошибке сети с деталями",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Тайм-аут соединения"
+      }
+    }
+  },
+  "@chatTitle": {
+    "description": "Заголовок экрана чата с именем собеседника",
+    "placeholders": {
+      "userName": {
+        "type": "String",
+        "example": "Анна"
+      }
+    }
+  },
+  "@termsUrlDisplay": {
+    "description": "Отображение сокращённого URL соглашения",
+    "placeholders": {
+      "agreementUrl": {
+        "type": "String",
+        "example": "https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie"
+      }
+    }
+  }
+}

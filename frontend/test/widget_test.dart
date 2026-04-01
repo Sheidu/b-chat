@@ -12,7 +12,7 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => AuthProvider(),
-        child: const MyApp(),
+        child: const BChatApp(),
       ),
     );
 

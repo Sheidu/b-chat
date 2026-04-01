@@ -1,0 +1,90 @@
+{
+  "appName": "Family Chat",
+  "loginTitle": "Sign in to continue",
+  "loginButton": "Login",
+  "registerTitle": "Create Account",
+  "registerHeader": "Join the Family",
+  "registerButton": "Create Account",
+  "emailLabel": "Email",
+  "emailHint": "Email",
+  "emailRequired": "Please enter your email",
+  "emailInvalid": "Please enter a valid email",
+  "emailRuHint": "For RU users: .ru or .рф domains required",
+  "passwordLabel": "Password",
+  "passwordHint": "Password",
+  "passwordRequired": "Please enter your password",
+  "passwordMinLength": "Password must be at least 4 characters",
+  "passwordTooShort": "Password too short (min 4 characters)",
+  "nameLabel": "Name (optional)",
+  "termsCheckboxLabel": "I accept the User Agreement",
+  "termsCheckboxSubtitle": "Required to register an account",
+  "termsRequired": "You must accept the User Agreement",
+  "termsViewLink": "Read full User Agreement →",
+  "termsUrlDisplay": "🔗 {agreementUrl}",
+  "loginFailed": "Invalid email or password",
+  "registrationFailed": "Registration failed",
+  "registrationSuccess": "Account created! Please login",
+  "noAccountPrompt": "Don't have an account? Register",
+  "hasAccountPrompt": "Already have an account? Login",
+  "homeTitle": "Family – {name}",
+  "logoutButton": "Log out",
+  "loadingUsers": "Loading contacts...",
+  "loadUsersError": "Failed to load contacts",
+  "networkError": "Connection error: {error}",
+  "noUsersMessage": "No family members yet. Invite someone to start chatting!",
+  "retryButton": "Retry",
+  "chatTitle": "Chat with {userName}",
+  "loadingMessages": "Loading messages...",
+  "chatHint": "Type a message...",
+  "sendMessage": "Send message",
+  "messageSendFailed": "Failed to send. Check your connection.",
+  "connectionLost": "Connection lost. Reconnecting...",
+  "noMessages": "No messages yet. Start the conversation!",
+  "connectionStatusConnected": "Connected",
+  "connectionStatusConnecting": "Connecting...",
+  "connectionStatusDisconnected": "Disconnected",
+  "connectionStatusError": "Connection error",
+  "genericError": "An unexpected error occurred",
+  "complianceFooter": "Registration complies with Federal Law No. 406-FZ",
+  "cannotOpenLink": "Could not open link. Please copy the URL manually.",
+  "emailDomainNotAllowed": "Email domain not allowed for registration",
+  "@appName": {
+    "description": "Application name displayed in app bar"
+  },
+  "@homeTitle": {
+    "description": "Home screen title with user name",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "John"
+      }
+    }
+  },
+  "@networkError": {
+    "description": "Network error message with details",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Connection timeout"
+      }
+    }
+  },
+  "@chatTitle": {
+    "description": "Chat screen title with recipient name",
+    "placeholders": {
+      "userName": {
+        "type": "String",
+        "example": "Anna"
+      }
+    }
+  },
+  "@termsUrlDisplay": {
+    "description": "Display truncated agreement URL",
+    "placeholders": {
+      "agreementUrl": {
+        "type": "String",
+        "example": "https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie"
+      }
+    }
+  }
+}
