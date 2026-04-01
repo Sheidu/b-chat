@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/messages.dart';
 import '../providers/auth_provider.dart';
 import '../services/socket_service.dart';
@@ -25,12 +26,21 @@ class _ChatScreenState extends State<ChatScreen> {
   late SocketService _socketService;
   int? _currentUserId;
   int _clientTokenCounter = 0;
-
   int get _otherUserId => _parseUserId(widget.otherUser['id']);
 
   @override
   void initState() {
     super.initState();
+
+    // ✅ Add listener to rebuild UI when text changes (for send button color)
+    _messageController.addListener(() {
+      if (mounted) {
+        setState(() {
+          // Empty setState to trigger rebuild for button color update
+        });
+      }
+    });
+
     final auth = Provider.of<AuthProvider>(context, listen: false);
     _currentUserId = _parseOptionalUserId(auth.user?['id']);
 
@@ -41,6 +51,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _socketService = SocketService();
     _socketService.connect(_currentUserId!);
+    
+    // ✅ Connection state is now read via Consumer<SocketService> in build()    
     _socketService.listenNewMessages((message) {
       if (!mounted) return;
 
@@ -89,6 +101,19 @@ class _ChatScreenState extends State<ChatScreen> {
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty || _currentUserId == null) return;
+    
+    // ✅ Check connection via SocketService state, not local variable
+    if (!_socketService.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.connectionLost),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
     final clientToken = _nextClientToken();
 
     final sent = _socketService.sendMessage(
@@ -100,6 +125,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (!sent) {
       debugPrint('Message not sent because socket is disconnected.');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.messageSendFailed),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return;
     }
 
@@ -189,56 +222,133 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  // ✅ Helper for status color - with default return for null-safety
+  Color _getStatusColor(SocketConnectionState state) {
+    switch (state) {
+      case SocketConnectionState.connected:
+        return Colors.green;
+      case SocketConnectionState.connecting:
+        return Colors.orange;
+      case SocketConnectionState.disconnected:
+        return Colors.grey;
+      case SocketConnectionState.error:
+        return Colors.red;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final otherUserName = widget.otherUser['name'] ?? widget.otherUser['email'] ?? '';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.otherUser['name'] ?? widget.otherUser['email']),
+        title: Text(l10n.chatTitle(otherUserName)),
+        actions: [
+          // ✅ Connection status indicator - uses Consumer for real-time sync
+          Consumer<SocketService>(
+            builder: (context, socketService, _) {
+              return Text(
+                socketService.getConnectionStatusText(l10n),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _getStatusColor(socketService.connectionState),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 12),
+        ],
       ),
       body: Column(
         children: [
+          // ✅ Connection banner - ALSO uses Consumer for sync with AppBar
+          Consumer<SocketService>(
+            builder: (context, socketService, _) {
+              if (socketService.connectionState == SocketConnectionState.disconnected ||
+                  socketService.connectionState == SocketConnectionState.error) {
+                return Container(
+                  width: double.infinity,
+                  color: Colors.orange[100],
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange[800]),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.connectionLost,
+                        style: TextStyle(fontSize: 12, color: Colors.orange[800]),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return const SizedBox.shrink(); // Hide banner when connected
+            },
+          ),
+          
+          // Loading state
           if (_loadingHistory)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Center(child: CircularProgressIndicator()),
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(l10n.loadingMessages, style: const TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
             )
           else
             Expanded(
-              child: ListView.builder(
-                reverse: true, // newest at bottom
-                padding: const EdgeInsets.all(8),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  final msg = _messages[_messages.length - 1 - index];
-                  final isMe = msg.isSentBy(_currentUserId ?? -1);
+              child: _messages.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey[400]),
+                          const SizedBox(height: 12),
+                          Text(
+                            l10n.noMessages,
+                            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      reverse: true,
+                      padding: const EdgeInsets.all(8),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, index) {
+                        final msg = _messages[_messages.length - 1 - index];
+                        final isMe = msg.isSentBy(_currentUserId ?? -1);
 
-                  return Align(
-                    alignment:
-                        isMe ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(
-                        vertical: 4,
-                        horizontal: 8,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isMe ? Colors.blue[100] : Colors.grey[300],
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        msg.text,
-                        style: TextStyle(
-                          color: isMe ? Colors.blue[900] : Colors.black87,
-                        ),
-                      ),
+                        return Align(
+                          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isMe ? Colors.blue[100] : Colors.grey[300],
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              msg.text,
+                              style: TextStyle(
+                                color: isMe ? Colors.blue[900] : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
+          
+          // Message input area
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -247,27 +357,38 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: TextField(
                     controller: _messageController,
                     decoration: InputDecoration(
-                      hintText: 'Type a message...',
+                      hintText: l10n.chatHint,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      isDense: true,
                     ),
+                    textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.send, color: Colors.blue),
+                  icon: const Icon(Icons.send),
                   onPressed: _sendMessage,
+                  tooltip: l10n.sendMessage,
+                  color: _messageController.text.trim().isEmpty ? Colors.grey : Colors.blue,
                 ),
               ],
             ),
           ),
         ],
+      ),
+      // Compliance footer for RU users
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        color: Theme.of(context).canvasColor,
+        child: Text(
+          l10n.complianceFooter,
+          style: const TextStyle(fontSize: 9, color: Colors.grey),
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }

@@ -43,6 +43,24 @@ flutter pub get
 flutter run
 ```
 
+### Frontend localization (RU/EN)
+
+The Flutter client is localized in **Russian** and **English** using Flutter `gen-l10n`.
+
+- ARB source files:
+  - `frontend/lib/l10n/app_ru.arb`
+  - `frontend/lib/l10n/app_en.arb`
+- Generated localization classes:
+  - `frontend/lib/l10n/app_localizations.dart`
+  - `frontend/lib/l10n/app_localizations_ru.dart`
+  - `frontend/lib/l10n/app_localizations_en.dart`
+
+Runtime locale behavior:
+- Supported locales: `ru`, `en`
+- First launch: app detects system locale
+- If system locale is unsupported, fallback is `ru`
+- User selection is persisted in `SharedPreferences` (`user_locale`) and can be changed from **Settings → Language**
+
 ## 3) API base URL configuration (important)
 
 The frontend now supports a single runtime setting for backend URL via `--dart-define`:
@@ -173,6 +191,16 @@ After backend + frontend are both running, normal indicators include:
 - Frontend: `Received newMessage: {...}` when messages arrive
 
 If you see those, your REST + realtime flow is healthy.
+
+## Localization QA checklist
+
+After launching frontend, verify:
+
+- Login, Register, Home, Chat, and Settings screens are translated in both RU and EN.
+- Language toggle in Settings switches UI immediately.
+- Selected language persists after app restart.
+- System-locale auto-detection works on first launch for `ru` and `en`.
+- Unsupported system locale falls back to Russian.
 
 
 ## Deployment and capacity planning

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final auth = Provider.of<AuthProvider>(context);
 
     return Scaffold(
@@ -35,55 +38,70 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.blue,
                   ),
                   const SizedBox(height: 32),
-                  const Text(
-                    'Family Chat',
-                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                  Text(
+                    l10n.appName,
+                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Sign in to continue',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                  Text(
+                    l10n.loginTitle,
+                    style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
 
+                  // Email field with RU compliance hint
                   TextFormField(
                     controller: _emailController,
                     decoration: InputDecoration(
-                      labelText: 'Email',
+                      labelText: l10n.emailLabel,
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      helperText: l10n.emailRuHint,
+                      helperStyle: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                     keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Please enter your email';
-                      if (!value.contains('@')) return 'Please enter a valid email';
+                      if (value == null || value.isEmpty) return l10n.emailRequired;
+                      if (!value.contains('@')) return l10n.emailInvalid;
+                      // Client-side hint only - server enforces REGISTRATION_POLICY strictly
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
 
+                  // Password field
                   TextFormField(
                     controller: _passwordController,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: l10n.passwordLabel,
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        ),
                         onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                       ),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Please enter your password';
-                      if (value.length < 4) return 'Password must be at least 4 characters';
+                      if (value == null || value.isEmpty) return l10n.passwordRequired;
+                      if (value.length < 4) return l10n.passwordMinLength;
                       return null;
                     },
                   ),
                   const SizedBox(height: 32),
 
+                  // Login button with loading state
                   if (auth.isLoading)
-                    const CircularProgressIndicator()
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    )
                   else
                     SizedBox(
                       width: double.infinity,
@@ -91,6 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: ElevatedButton(
                         onPressed: () async {
                           if (!_formKey.currentState!.validate()) return;
+                          
                           final messenger = ScaffoldMessenger.of(context);
 
                           final success = await auth.login(
@@ -99,42 +118,61 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
 
                           if (success) {
-                            // Navigation handled by main.dart Consumer or here:
-                            // Navigator.pushReplacementNamed(context, '/home');
+                            // Navigation handled by main.dart Consumer of AuthProvider
                             return;
                           }
 
+                          // Show localized error with fallback
                           messenger.showSnackBar(
                             SnackBar(
-                              content: Text(auth.error ?? 'Login failed'),
+                              content: Text(auth.error ?? l10n.loginFailed),
                               backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 4),
+                              behavior: SnackBarBehavior.floating,
                             ),
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
                         ),
-                        child: const Text('Login', style: TextStyle(fontSize: 18)),
+                        child: Text(l10n.loginButton, style: const TextStyle(fontSize: 18)),
                       ),
                     ),
 
                   const SizedBox(height: 16),
+                  
+                  // Register navigation
                   TextButton(
                     onPressed: () {
                       Navigator.pushNamed(context, '/register');
                     },
-                    child: const Text("Don't have an account? Register"),
+                    child: Text(l10n.noAccountPrompt),
                   ),
 
+                  // Server error display (localized)
                   if (auth.error != null && !auth.isLoading)
                     Padding(
                       padding: const EdgeInsets.only(top: 16),
                       child: Text(
-                        auth.error!,
+                        // Prefer localized message if error matches known keys
+                        _getLocalizedError(auth.error!, l10n),
                         style: const TextStyle(color: Colors.red, fontSize: 14),
                         textAlign: TextAlign.center,
                       ),
                     ),
+
+                  // Compliance footer for RU users
+                  Padding(
+                    padding: const EdgeInsets.only(top: 24, bottom: 8),
+                    child: Text(
+                      l10n.complianceFooter,
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -142,6 +180,25 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  /// Maps common backend error messages to localized strings
+  String _getLocalizedError(String serverError, AppLocalizations l10n) {
+    // Map known backend error patterns to localized messages
+    if (serverError.contains('Invalid email or password') ||
+        serverError.contains('Неверный email или пароль')) {
+      return l10n.loginFailed;
+    }
+    if (serverError.contains('Email domain not allowed') ||
+        serverError.contains('Домен электронной почты не разрешён')) {
+      return l10n.emailDomainNotAllowed;
+    }
+    if (serverError.contains('User not found') ||
+        serverError.contains('Пользователь не найден')) {
+      return l10n.loginFailed;
+    }
+    // Fallback: return original server message if no match
+    return serverError;
   }
 
   @override
