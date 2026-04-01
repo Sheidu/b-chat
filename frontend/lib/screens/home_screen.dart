@@ -111,6 +111,15 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(l10n.homeTitle(currentUserName)),
         actions: [
+          // Settings button
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.pushNamed(context, '/settings');
+            },
+            tooltip: l10n.settingsTitle,
+          ),
+          // Logout button
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => auth.logout(),

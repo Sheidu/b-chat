@@ -162,4 +162,33 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get emailDomainNotAllowed => 'Домен электронной почты не разрешён для регистрации';
+
+  @override
+  String get settingsTitle => 'Настройки';
+
+  @override
+  String get languageLabel => 'Язык';
+
+  @override
+  String get languageSubtitle => 'Выберите предпочтительный язык';
+
+  @override
+  String get languageDefaultHint => '(По умолчанию для соответствия требованиям)';
+
+  @override
+  String get accountLabel => 'Аккаунт';
+
+  @override
+  String get complianceInfoTitle => 'Информация о соответствии';
+
+  @override
+  String appVersion(String version) {
+    return 'Версия $version';
+  }
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageRussian => 'Русский';
 }

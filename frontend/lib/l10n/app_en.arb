@@ -48,8 +48,26 @@
   "complianceFooter": "Registration complies with Federal Law No. 406-FZ",
   "cannotOpenLink": "Could not open link. Please copy the URL manually.",
   "emailDomainNotAllowed": "Email domain not allowed for registration",
+  "settingsTitle": "Settings",
+  "languageLabel": "Language",
+  "languageSubtitle": "Select your preferred language",
+  "languageDefaultHint": "(Default for compliance)",
+  "accountLabel": "Account",
+  "complianceInfoTitle": "Compliance Information",
+  "appVersion": "Version {version}",
+  "languageEnglish": "English",
+  "languageRussian": "Russian",
   "@appName": {
     "description": "Application name displayed in app bar"
+  },
+  "@appVersion": {
+    "description": "App version display",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.0.0"
+      }
+    }
   },
   "@homeTitle": {
     "description": "Home screen title with user name",

@@ -388,6 +388,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Email domain not allowed for registration'**
   String get emailDomainNotAllowed;
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// No description provided for @languageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get languageLabel;
+
+  /// No description provided for @languageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your preferred language'**
+  String get languageSubtitle;
+
+  /// No description provided for @languageDefaultHint.
+  ///
+  /// In en, this message translates to:
+  /// **'(Default for compliance)'**
+  String get languageDefaultHint;
+
+  /// No description provided for @accountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get accountLabel;
+
+  /// No description provided for @complianceInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Compliance Information'**
+  String get complianceInfoTitle;
+
+  /// App version display
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String appVersion(String version);
+
+  /// No description provided for @languageEnglish.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageEnglish;
+
+  /// No description provided for @languageRussian.
+  ///
+  /// In en, this message translates to:
+  /// **'Russian'**
+  String get languageRussian;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

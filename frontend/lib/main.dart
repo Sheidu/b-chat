@@ -5,14 +5,30 @@ import 'package:provider/provider.dart';
 
 import 'l10n/app_localizations.dart';
 import 'providers/auth_provider.dart';
+import 'providers/locale_provider.dart';
 import 'services/socket_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const BChatApp());
+  
+  // Initialize locale provider before running app
+  final localeProvider = LocaleProvider();
+  await localeProvider.loadLocale();  // ← Load saved locale
+  
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => SocketService(), lazy: true),
+        ChangeNotifierProvider.value(value: localeProvider),
+      ],
+      child: const BChatApp(),
+    ),
+  );
 }
 
 class BChatApp extends StatelessWidget {
@@ -20,58 +36,72 @@ class BChatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => SocketService(), lazy: true),
-      ],
-      child: MaterialApp(
-        title: AppLocalizations.of(context)?.appName ?? 'Family Chat',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          useMaterial3: true,
-          textTheme: const TextTheme(bodySmall: TextStyle(fontSize: 10)),
-        ),
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [Locale('en', ''), Locale('ru', '')],
-        locale: const Locale('ru', ''),
-        localeResolutionCallback: (locale, supportedLocales) {
-          if (locale?.languageCode == 'ru') return const Locale('ru', '');
-          return const Locale('en', '');
-        },
-        home: Consumer<AuthProvider>(
-          builder: (context, auth, _) {
-            if (auth.isLoggedIn) {
-              return const HomeScreen();
-            }
-            return const LoginScreen();
+    return Consumer<LocaleProvider>(
+      builder: (context, localeProvider, _) {
+        // Show loading screen while locale is loading
+        if (localeProvider.isLoading) {
+          return const MaterialApp(
+            home: Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        return MaterialApp(
+          title: AppLocalizations.of(context)?.appName ?? 'Family Chat',
+          debugShowCheckedModeBanner: false,
+          
+          // 🌍 Locale configuration
+          locale: localeProvider.locale,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('en'),
+            Locale('ru'),
+          ],
+          
+          theme: ThemeData(
+            primarySwatch: Colors.blue,
+            useMaterial3: true,
+            textTheme: const TextTheme(bodySmall: TextStyle(fontSize: 10)),
+          ),
+          
+          home: Consumer<AuthProvider>(
+            builder: (context, auth, _) {
+              if (auth.isLoggedIn) {
+                return const HomeScreen();
+              }
+              return const LoginScreen();
+            },
+          ),
+          
+          routes: {
+            '/register': (context) => const RegisterScreen(),
+            '/settings': (context) => const SettingsScreen(),
           },
-        ),
-        routes: {'/register': (context) => const RegisterScreen()},
-        onUnknownRoute: (settings) {
-          return MaterialPageRoute(builder: (_) => const LoginScreen());
-        },
-        builder: (context, child) {
-          _setErrorWidgetBuilder(context);
-          return child ?? const SizedBox();
-        },
-      ),
+          
+          onUnknownRoute: (settings) {
+            return MaterialPageRoute(builder: (_) => const LoginScreen());
+          },
+          
+          builder: (context, child) {
+            _setErrorWidgetBuilder(context);
+            return child ?? const SizedBox();
+          },
+        );
+      },
     );
   }
 
   void _setErrorWidgetBuilder(BuildContext context) {
     ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
       if (kDebugMode) {
-        // ✅ In debug mode, show detailed error with exception message
         return ErrorWidget.withDetails(message: errorDetails.exception.toString());
       }
-      // In production, show localized user-friendly error
       final l10n = AppLocalizations.of(context);
       return Material(
         child: Center(

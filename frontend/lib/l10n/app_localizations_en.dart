@@ -162,4 +162,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emailDomainNotAllowed => 'Email domain not allowed for registration';
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get languageLabel => 'Language';
+
+  @override
+  String get languageSubtitle => 'Select your preferred language';
+
+  @override
+  String get languageDefaultHint => '(Default for compliance)';
+
+  @override
+  String get accountLabel => 'Account';
+
+  @override
+  String get complianceInfoTitle => 'Compliance Information';
+
+  @override
+  String appVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageRussian => 'Russian';
 }

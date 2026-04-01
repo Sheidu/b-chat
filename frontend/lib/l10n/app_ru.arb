@@ -48,8 +48,26 @@
   "complianceFooter": "Регистрация соответствует Федеральному закону № 406-ФЗ",
   "cannotOpenLink": "Не удалось открыть ссылку. Скопируйте URL вручную.",
   "emailDomainNotAllowed": "Домен электронной почты не разрешён для регистрации",
+  "settingsTitle": "Настройки",
+  "languageLabel": "Язык",
+  "languageSubtitle": "Выберите предпочтительный язык",
+  "languageDefaultHint": "(По умолчанию для соответствия требованиям)",
+  "accountLabel": "Аккаунт",
+  "complianceInfoTitle": "Информация о соответствии",
+  "appVersion": "Версия {version}",
+  "languageEnglish": "English",
+  "languageRussian": "Русский",
   "@appName": {
     "description": "Название приложения в заголовке"
+  },
+  "@appVersion": {
+    "description": "Отображение версии приложения",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.0.0"
+      }
+    }
   },
   "@homeTitle": {
     "description": "Заголовок главного экрана с именем пользователя",
