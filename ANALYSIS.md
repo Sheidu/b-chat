@@ -168,3 +168,25 @@ The repository docs now explicitly document:
 - how to override that URL for production;
 - backend compliance env vars (`REGISTRATION_POLICY`, `TERMS_VERSION`, `MESSAGE_ENCRYPTION_KEY`);
 - compliance/audit tables and encrypted message storage behavior.
+
+## Localization Audit (April 4, 2026)
+
+### Status: Implemented and wired end-to-end for RU/EN
+
+Findings:
+1. Flutter localization is enabled in `MaterialApp`:
+   - delegates configured (`AppLocalizations.delegate` + global Flutter delegates)
+   - supported locales declared (`en`, `ru`)
+2. Locale is managed through `LocaleProvider` and loaded before `runApp`:
+   - persisted key: `user_locale` in `SharedPreferences`
+   - first-launch behavior: detect system locale
+   - unsupported system locale fallback: `ru`
+3. UI language can be switched at runtime in Settings:
+   - `RadioGroup<Locale>` with RU/EN options
+4. Core user-facing screens consume localized strings:
+   - login, registration, home, chat, settings, common errors/connection states
+5. ARB and generated localization files are present for both RU/EN.
+
+### Remaining localization risks
+1. Documentation previously did not describe locale fallback and persistence behavior (now updated).
+2. Future string additions require ARB updates + localization regeneration discipline (`flutter gen-l10n`).
