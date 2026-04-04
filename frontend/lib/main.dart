@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import 'l10n/app_localizations.dart';
@@ -14,11 +13,11 @@ import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize locale provider before running app
   final localeProvider = LocaleProvider();
   await localeProvider.loadLocale();  // ← Load saved locale
-  
+
   runApp(
     MultiProvider(
       providers: [
@@ -48,28 +47,37 @@ class BChatApp extends StatelessWidget {
         }
 
         return MaterialApp(
-          title: AppLocalizations.of(context)?.appName ?? 'Family Chat',
+          onGenerateTitle: (context) => AppLocalizations.of(context)!.appName,
           debugShowCheckedModeBanner: false,
-          
+
           // 🌍 Locale configuration
           locale: localeProvider.locale,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: const [
-            Locale('en'),
-            Locale('ru'),
-          ],
-          
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localeResolutionCallback: (deviceLocale, supportedLocales) {
+            final selected = localeProvider.locale;
+            if (selected != null) {
+              return selected;
+            }
+
+            if (deviceLocale != null) {
+              final matched = supportedLocales.where(
+                (locale) => locale.languageCode == deviceLocale.languageCode,
+              );
+              if (matched.isNotEmpty) {
+                return matched.first;
+              }
+            }
+
+            return const Locale('ru');
+          },
+
           theme: ThemeData(
             primarySwatch: Colors.blue,
             useMaterial3: true,
             textTheme: const TextTheme(bodySmall: TextStyle(fontSize: 10)),
           ),
-          
+
           home: Consumer<AuthProvider>(
             builder: (context, auth, _) {
               if (auth.isLoggedIn) {
@@ -78,16 +86,16 @@ class BChatApp extends StatelessWidget {
               return const LoginScreen();
             },
           ),
-          
+
           routes: {
             '/register': (context) => const RegisterScreen(),
             '/settings': (context) => const SettingsScreen(),
           },
-          
+
           onUnknownRoute: (settings) {
             return MaterialPageRoute(builder: (_) => const LoginScreen());
           },
-          
+
           builder: (context, child) {
             _setErrorWidgetBuilder(context);
             return child ?? const SizedBox();
@@ -113,7 +121,7 @@ class BChatApp extends StatelessWidget {
                 const Icon(Icons.error_outline, size: 48, color: Colors.red),
                 const SizedBox(height: 16),
                 Text(
-                  l10n?.genericError ?? 'An unexpected error occurred',
+                  l10n?.genericError ?? 'Произошла непредвиденная ошибка',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16),
                 ),
@@ -125,7 +133,7 @@ class BChatApp extends StatelessWidget {
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false),
-                  child: Text(l10n?.retryButton ?? 'Retry'),
+                  child: Text(l10n?.retryButton ?? 'Повторить'),
                 ),
               ],
             ),

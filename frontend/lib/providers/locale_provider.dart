@@ -2,9 +2,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../l10n/app_localizations.dart';
+
 class LocaleProvider extends ChangeNotifier {
   static const String _localeKey = 'user_locale';
-  static const supportedLanguages = ['ru', 'en'];
+  static const String _defaultLanguageCode = 'ru';
   Locale? _locale;
   bool _isLoading = true;
 
@@ -15,27 +17,18 @@ class LocaleProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final localeCode = prefs.getString(_localeKey);
+      final normalizedSavedCode = _normalizeLanguageCode(localeCode);
 
-      if (localeCode != null) {
-        // ✅ Use saved locale
-        _locale = Locale(localeCode);
+      if (normalizedSavedCode != null) {
+        _locale = Locale(normalizedSavedCode);
       } else {
-        // ✅ First launch → detect system locale
         final systemLocale = PlatformDispatcher.instance.locale;
-
-        if (supportedLanguages.contains(systemLocale.languageCode)) {
-          _locale = Locale(systemLocale.languageCode);
-        } else {
-          // ✅ Compliance-safe fallback
-          _locale = const Locale('ru');
-        }
-
-        // ✅ Save detected locale immediately
+        final normalizedSystemCode = _normalizeLanguageCode(systemLocale.languageCode);
+        _locale = Locale(normalizedSystemCode ?? _defaultLanguageCode);
         await prefs.setString(_localeKey, _locale!.languageCode);
       }
     } catch (e) {
-      // Fallback to Russian on error (compliance-safe)
-      _locale = const Locale('ru');
+      _locale = const Locale(_defaultLanguageCode);
     }
 
     _isLoading = false;
@@ -44,15 +37,27 @@ class LocaleProvider extends ChangeNotifier {
 
   /// Set and save locale preference
   Future<void> setLocale(Locale newLocale) async {
+    final normalizedCode = _normalizeLanguageCode(newLocale.languageCode);
+    if (normalizedCode == null) return;
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_localeKey, newLocale.languageCode);
-      
-      _locale = newLocale;
+      await prefs.setString(_localeKey, normalizedCode);
+
+      _locale = Locale(normalizedCode);
       notifyListeners();
     } catch (e) {
       debugPrint('Failed to save locale: $e');
     }
+  }
+
+  String? _normalizeLanguageCode(String? code) {
+    if (code == null) return null;
+    final trimmed = code.trim().toLowerCase();
+    final isSupported = AppLocalizations.supportedLocales.any(
+      (locale) => locale.languageCode == trimmed,
+    );
+    return isSupported ? trimmed : null;
   }
 
   /// Check if locale is Russian

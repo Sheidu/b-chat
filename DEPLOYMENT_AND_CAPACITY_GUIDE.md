@@ -239,6 +239,34 @@ Output:
 3. Set proper app id/version in Gradle.
 4. Test release build on physical device.
 
+## 5) Localization deployment checklist (RU/EN)
+
+The frontend ships with Russian and English localization.
+
+Before publishing web/APK/AAB builds:
+
+1. Verify both ARB files are up to date:
+   - `frontend/lib/l10n/app_ru.arb`
+   - `frontend/lib/l10n/app_en.arb`
+2. Regenerate localization outputs:
+
+```bash
+cd frontend
+flutter gen-l10n
+```
+
+3. Smoke-test release builds in both languages:
+   - Login/Register/Home/Chat/Settings translations
+   - Settings language switch
+   - persisted locale after restart
+4. Validate first-run locale behavior:
+   - system `ru` => app `ru`
+   - system `en` => app `en`
+   - unsupported locale => fallback `ru`
+
+Operational note:
+- Locale preference is stored client-side (`SharedPreferences`, key `user_locale`) and does not require backend state.
+
 ---
 
 ## Practical summary
