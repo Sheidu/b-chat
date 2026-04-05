@@ -3,12 +3,13 @@ const cors = require('cors');
 const { createAuthRoutes } = require('./routes/auth.routes');
 const { createUsersRoutes } = require('./routes/users.routes');
 const { createMessagesRoutes } = require('./routes/messages.routes');
+const { createCorsOptions } = require('./services/http-config.service');
 
-function createApp({ authService, usersService, messagesService }) {
+function createApp({ authService, usersService, messagesService, corsAllowlist }) {
   const app = express();
 
-  app.use(cors());
-  app.use(express.json());
+  app.use(cors(createCorsOptions({ corsAllowlist })));
+  app.use(express.json({ limit: '32kb' }));
 
   app.use(createAuthRoutes({ authService }));
   app.use(createUsersRoutes({ usersService }));

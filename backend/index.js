@@ -1,7 +1,7 @@
 const http = require('http');
 const path = require('path');
-const fs = require('fs');
 const { Server } = require('socket.io');
+const dotenv = require('dotenv');
 const { createApp } = require('./app');
 const { createDatabaseConnection } = require('./db/connection');
 const { runMigrations } = require('./db/migrations');
@@ -13,32 +13,33 @@ const { buildUsersService } = require('./services/users.service');
 const { buildMessagesService } = require('./services/messages.service');
 const { registerChatSocketHandlers } = require('./sockets/chat.socket');
 const { createMessageCrypto } = require('./security/message-crypto');
+const { ensureEnvFile, runProductionHardeningChecks } = require('./services/runtime-hardening.service');
+const { parseCorsOrigins } = require('./services/http-config.service');
 
-const envPath = path.join(__dirname, '.env');
-const envExamplePath = path.join(__dirname, '.env.example');
+const baseDir = __dirname;
+const envPath = path.join(baseDir, '.env');
+const envExamplePath = path.join(baseDir, '.env.example');
 
-if (!fs.existsSync(envPath)) {
-  if (fs.existsSync(envExamplePath)) {
-    try {
-      fs.copyFileSync(envExamplePath, envPath);
-      console.log('.env created from .env.example. Please update secrets!');
-    } catch (_err) {
-      console.log('No .env and no .env.example found');
-    }
-  } else {
-    console.log('No .env and no .env.example found');
-  }
-}
+ensureEnvFile({ envPath, envExamplePath });
+dotenv.config({ path: envPath });
 
-require('dotenv').config({ path: envPath });
-
-const BCRYPT_SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS || 12);
+const bcryptSaltRounds = Number(process.env.BCRYPT_SALT_ROUNDS || 12);
 const shouldLogSqlStatements = process.env.SQL_VERBOSE === '1';
 const registrationPolicy = process.env.REGISTRATION_POLICY || 'strict_ru_email';
 const termsVersion = process.env.TERMS_VERSION || '2026-03-31';
+const corsAllowlist = process.env.CORS_ALLOWLIST || '';
+const sessionCookieSecure = process.env.SESSION_COOKIE_SECURE || 'auto';
+const messageEncryptionKey = process.env.MESSAGE_ENCRYPTION_KEY || '';
+
+runProductionHardeningChecks({
+  nodeEnv: process.env.NODE_ENV,
+  messageEncryptionKey,
+  corsAllowlist,
+  sessionCookieSecure,
+});
 
 const db = createDatabaseConnection({
-  baseDir: __dirname,
+  baseDir,
   shouldLogSqlStatements,
 });
 
@@ -47,16 +48,20 @@ runMigrations(db);
 const usersRepository = buildUsersRepository(db);
 const messagesRepository = buildMessagesRepository(db);
 const complianceRepository = buildComplianceRepository(db);
-const messageCrypto = createMessageCrypto({ rawKey: process.env.MESSAGE_ENCRYPTION_KEY || '' });
+const messageCrypto = createMessageCrypto({ rawKey: messageEncryptionKey });
 
 const io = new Server({
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: {
+    origin: parseCorsOrigins(corsAllowlist),
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
 });
 
 const authService = buildAuthService({
   usersRepository,
   complianceRepository,
-  bcryptSaltRounds: BCRYPT_SALT_ROUNDS,
+  bcryptSaltRounds,
   registrationPolicy,
   defaultTermsVersion: termsVersion,
   onUserRegistered: (user) => {
@@ -67,13 +72,13 @@ const authService = buildAuthService({
 const usersService = buildUsersService({ usersRepository });
 const messagesService = buildMessagesService({ messagesRepository, messageCrypto });
 
-const app = createApp({ authService, usersService, messagesService });
+const app = createApp({ authService, usersService, messagesService, corsAllowlist });
 const server = http.createServer(app);
 io.attach(server);
 
 registerChatSocketHandlers({ io, messagesService });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const port = process.env.PORT || 3000;
+server.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });

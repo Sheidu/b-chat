@@ -7,11 +7,14 @@ test('messages service encrypts stored text and decrypts on read', () => {
   const stored = [];
   const messagesRepository = {
     createMessage(fromId, toId, text, clientToken) {
-      stored.push({ from_id: fromId, to_id: toId, text, client_token: clientToken, timestamp: 'now' });
+      stored.push({ id: 1, from_id: fromId, to_id: toId, text, client_token: clientToken, timestamp: 'now' });
       return { lastInsertRowid: 1 };
     },
     listMessagesBetweenUsers() {
-      return [{ id: 1, ...stored[0] }];
+      return [{ ...stored[0] }];
+    },
+    findMessageByClientToken(token) {
+      return stored.find((message) => message.client_token === token) || null;
     },
   };
 
@@ -19,10 +22,65 @@ test('messages service encrypts stored text and decrypts on read', () => {
   const service = buildMessagesService({ messagesRepository, messageCrypto });
 
   const created = service.createMessage({ from: 1, to: 2, text: 'secret hello', clientToken: 'abc' });
-  assert.equal(created.text, 'secret hello');
+  assert.equal(created.status, 201);
+  assert.equal(created.body.text, 'secret hello');
   assert.ok(stored[0].text.startsWith('enc:v1:'));
 
   const listed = service.listConversation(1, 2);
   assert.equal(listed.status, 200);
   assert.equal(listed.body[0].text, 'secret hello');
+});
+
+test('messages service validates malformed and boundary payloads', () => {
+  const service = buildMessagesService({
+    messagesRepository: {
+      createMessage() {
+        throw new Error('should not write invalid messages');
+      },
+      listMessagesBetweenUsers() {
+        return [];
+      },
+      findMessageByClientToken() {
+        return null;
+      },
+    },
+    messageCrypto: null,
+  });
+
+  assert.equal(service.createMessage({ from: 'x', to: 2, text: 'ok' }).status, 400);
+  assert.equal(service.createMessage({ from: 1, to: 2, text: '' }).status, 400);
+  assert.equal(service.createMessage({ from: 1, to: 2, text: 'a'.repeat(4001) }).status, 400);
+  assert.equal(service.createMessage({ from: 1, to: 2, text: 'ok', clientToken: 'a'.repeat(129) }).status, 400);
+  assert.equal(service.listConversation('nan', 2).status, 400);
+});
+
+test('messages service returns existing message for duplicate client token', () => {
+  const duplicateErr = new Error('UNIQUE constraint failed: messages.client_token');
+  const stored = {
+    id: 3,
+    from_id: 1,
+    to_id: 2,
+    text: 'persisted',
+    client_token: 'dup-token',
+    timestamp: new Date().toISOString(),
+  };
+
+  const service = buildMessagesService({
+    messagesRepository: {
+      createMessage() {
+        throw duplicateErr;
+      },
+      listMessagesBetweenUsers() {
+        return [];
+      },
+      findMessageByClientToken() {
+        return stored;
+      },
+    },
+    messageCrypto: null,
+  });
+
+  const result = service.createMessage({ from: 1, to: 2, text: 'persisted', clientToken: 'dup-token' });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.id, 3);
 });

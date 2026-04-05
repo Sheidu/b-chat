@@ -6,14 +6,21 @@ function registerChatSocketHandlers({ io, messagesService }) {
       socket.join(`user_${userId}`);
     });
 
-    socket.on('sendMessage', (data) => {
+    socket.on('sendMessage', (data, ack) => {
       const { from, to, text, clientToken } = data || {};
 
       try {
-        const message = messagesService.createMessage({ from, to, text, clientToken });
-        io.to(`user_${from}`).to(`user_${to}`).emit('newMessage', message);
+        const result = messagesService.createMessage({ from, to, text, clientToken });
+        if (result.status >= 400) {
+          if (typeof ack === 'function') ack({ ok: false, error: result.body.error });
+          return;
+        }
+
+        io.to(`user_${result.body.from_id}`).to(`user_${result.body.to_id}`).emit('newMessage', result.body);
+        if (typeof ack === 'function') ack({ ok: true, message: result.body });
       } catch (err) {
         console.error('Message insert error:', err);
+        if (typeof ack === 'function') ack({ ok: false, error: 'Message persistence failed' });
       }
     });
 

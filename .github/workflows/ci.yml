@@ -2,54 +2,60 @@ name: CI
 
 on:
   push:
-    branches: ['**']
   pull_request:
 
 jobs:
-  backend:
+  test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
 
-      - name: Install backend dependencies
+      - name: Backend install
+        working-directory: backend
         run: npm ci
 
-      - name: Lint backend (syntax checks)
+      - name: Backend lint
+        working-directory: backend
         run: npm run lint
 
-      - name: Test backend
-        run: npm test
-
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Backend tests with coverage
+        working-directory: backend
+        run: |
+          set -o pipefail
+          npm run test:coverage | tee coverage.txt
+          node -e "const fs=require('fs');const t=fs.readFileSync('coverage.txt','utf8');const r=/all files\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)/i.exec(t);if(!r){console.error('Coverage summary not found');process.exit(1);}const [l,b,f,s]=r.slice(1).map(Number);if(l<85||f<85||s<85||b<75){console.error(`Coverage below threshold L:${l} B:${b} F:${f} S:${s}`);process.exit(1);}"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
 
-      - name: Install frontend dependencies
+      - name: Frontend dependencies
+        working-directory: frontend
         run: flutter pub get
 
-      - name: Analyze frontend
-        run: flutter analyze
-
-      - name: Test frontend
-        run: flutter test
+      - name: Frontend tests with coverage
+        working-directory: frontend
+        run: |
+          flutter test --coverage
+          python3 - <<'PY'
+from pathlib import Path
+p=Path('coverage/lcov.info')
+lines=hits=0
+for line in p.read_text().splitlines():
+    if line.startswith('DA:'):
+        _,rest=line.split(':',1)
+        _,count=rest.split(',')
+        lines += 1
+        if int(count) > 0:
+            hits += 1
+pct = (hits/lines*100) if lines else 0
+print(f'Frontend line coverage: {pct:.2f}% ({hits}/{lines})')
+if pct < 80:
+    raise SystemExit('Frontend line coverage below 80%')
+PY

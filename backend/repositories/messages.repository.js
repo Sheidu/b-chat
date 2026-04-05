@@ -9,12 +9,17 @@ function buildMessagesRepository(db) {
     'INSERT INTO messages (from_id, to_id, text, client_token) VALUES (?, ?, ?, ?)'
   );
 
+  const findByClientTokenStmt = db.prepare('SELECT * FROM messages WHERE client_token = ? LIMIT 1');
+
   return {
     listMessagesBetweenUsers(fromId, toId) {
       return listMessagesBetweenUsersStmt.all(fromId, toId, toId, fromId);
     },
     createMessage(fromId, toId, text, clientToken) {
       return createMessageStmt.run(fromId, toId, text, clientToken);
+    },
+    findMessageByClientToken(clientToken) {
+      return findByClientTokenStmt.get(clientToken) || null;
     },
   };
 }

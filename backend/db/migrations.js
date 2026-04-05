@@ -37,6 +37,12 @@ function runMigrations(db) {
   ensureColumn(db, 'messages', 'client_token', 'client_token TEXT');
 
   db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_token
+    ON messages(client_token)
+    WHERE client_token IS NOT NULL
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS compliance_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_type TEXT NOT NULL,

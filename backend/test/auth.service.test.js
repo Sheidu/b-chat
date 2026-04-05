@@ -175,3 +175,39 @@ test('login rejects invalid credentials', () => {
   assert.equal(result.status, 401);
   assert.deepEqual(result.body, { error: 'Invalid email or password' });
 });
+
+
+test('register rejects malformed payloads and boundary conditions', () => {
+  const authService = buildAuthService({
+    usersRepository: createUsersRepoStub(),
+    complianceRepository: createComplianceRepoStub(),
+    bcryptSaltRounds: 4,
+    registrationPolicy: 'strict_ru_email',
+  });
+
+  assert.equal(
+    authService.register({ email: null, password: 'x', termsAccepted: true, authChannel: 'email' }).status,
+    400
+  );
+  assert.equal(
+    authService.register({ email: 'valid@example.ru', password: '', termsAccepted: true, authChannel: 'email' }).status,
+    400
+  );
+  assert.equal(
+    authService.register({ email: 'valid@example.ru', password: 'x', termsAccepted: true, authChannel: 'sms' }).status,
+    400
+  );
+});
+
+test('login rejects malformed payloads', () => {
+  const authService = buildAuthService({
+    usersRepository: createUsersRepoStub(),
+    complianceRepository: createComplianceRepoStub(),
+    bcryptSaltRounds: 4,
+    registrationPolicy: 'strict_ru_email',
+  });
+
+  assert.equal(authService.login({ email: ' ', password: 'x' }).status, 400);
+  assert.equal(authService.login({ email: 'user@example.ru', password: null }).status, 400);
+  assert.equal(authService.login({ email: 'user@example.com', password: 'x' }).status, 400);
+});
