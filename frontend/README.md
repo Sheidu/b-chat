@@ -69,3 +69,17 @@ You can override it:
 ```bash
 flutter run --dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement
 ```
+
+## Reliability and UX notes
+
+- Chat send uses Socket.IO acknowledgement with retry queue for transient disconnects.
+- Conversation rendering de-duplicates optimistic/server echoes and suppresses duplicate IDs.
+- Login/Register now submit with Enter key exactly like pressing the action button.
+
+## Tests
+
+```bash
+flutter test
+```
+
+Includes de-duplication store tests and login/register Enter-key submission tests.

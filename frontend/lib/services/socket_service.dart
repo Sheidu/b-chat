@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
@@ -5,21 +6,31 @@ import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/messages.dart';
 
-/// Connection state enum for UI localization
-enum SocketConnectionState {
-  disconnected,
-  connecting,
-  connected,
-  error,
+enum SocketConnectionState { disconnected, connecting, connected, error }
+
+class _PendingOutgoingMessage {
+  _PendingOutgoingMessage({
+    required this.fromId,
+    required this.toId,
+    required this.text,
+    required this.clientToken,
+  });
+
+  final int fromId;
+  final int toId;
+  final String text;
+  final String clientToken;
+  int attempts = 0;
 }
 
 class SocketService with ChangeNotifier {
   io.Socket? _socket;
   SocketConnectionState _connectionState = SocketConnectionState.disconnected;
+  final Map<String, _PendingOutgoingMessage> _pendingQueue = {};
+  final int _maxSendAttempts = 3;
 
   bool get isConnected => _socket?.connected ?? false;
   SocketConnectionState get connectionState => _connectionState;
-
   static String get baseUrl => AppConfig.baseUrl;
 
   void connect(int userId) {
@@ -38,43 +49,35 @@ class SocketService with ChangeNotifier {
     _connectionState = SocketConnectionState.connecting;
     notifyListeners();
 
-    // ✅ socket_io_client v3.x API - pass options directly as Map
-    _socket = io.io(
-      baseUrl,
-      <String, dynamic>{
-        'transports': ['websocket'],
-        'extraHeaders': {'Connection': 'upgrade'},
-        'forceNew': true, 
-        'autoConnect': false,
-        'reconnection': true,
-        'reconnectionAttempts': 5,
-        'reconnectionDelay': 1000,
-        'reconnectionDelayMax': 5000,
-        'timeout': 10000
-      },
-    );
+    _socket = io.io(baseUrl, <String, dynamic>{
+      'transports': ['websocket'],
+      'forceNew': true,
+      'autoConnect': false,
+      'reconnection': true,
+      'reconnectionAttempts': 5,
+      'reconnectionDelay': 1000,
+      'reconnectionDelayMax': 5000,
+      'timeout': 10000,
+    });
 
     _socket!.onConnect((_) {
-      if (kDebugMode) debugPrint('✓ Socket connected → user $userId');
       _connectionState = SocketConnectionState.connected;
       notifyListeners();
       _socket!.emit('join', userId);
+      _flushPendingQueue();
     });
 
-    _socket!.onDisconnect((reason) {
-      if (kDebugMode) debugPrint('✗ Socket disconnected: $reason');
+    _socket!.onDisconnect((_) {
       _connectionState = SocketConnectionState.disconnected;
       notifyListeners();
     });
 
-    _socket!.onConnectError((err) {
-      if (kDebugMode) debugPrint('⚠ Connection error: $err');
+    _socket!.onConnectError((_) {
       _connectionState = SocketConnectionState.error;
       notifyListeners();
     });
 
-    _socket!.onError((err) {
-      if (kDebugMode) debugPrint('⚠ Socket error: $err');
+    _socket!.onError((_) {
       _connectionState = SocketConnectionState.error;
       notifyListeners();
     });
@@ -88,41 +91,83 @@ class SocketService with ChangeNotifier {
     required String text,
     required String clientToken,
   }) {
+    final pending = _PendingOutgoingMessage(
+      fromId: fromId,
+      toId: toId,
+      text: text,
+      clientToken: clientToken,
+    );
+    _pendingQueue[clientToken] = pending;
+
     if (!isConnected || _socket == null) {
-      if (kDebugMode) debugPrint('✗ Cannot send: socket not connected');
       return false;
     }
-    _socket!.emit('sendMessage', {
-      'from': fromId,
-      'to': toId,
-      'text': text,
-      'clientToken': clientToken,
-    });
-    if (kDebugMode) debugPrint('→ Sent message (token: $clientToken)');
+
+    _dispatchPendingMessage(pending);
     return true;
+  }
+
+  void _flushPendingQueue() {
+    for (final pending in _pendingQueue.values.toList()) {
+      _dispatchPendingMessage(pending);
+    }
+  }
+
+  void _dispatchPendingMessage(_PendingOutgoingMessage pending) {
+    if (_socket == null || !isConnected) return;
+    if (!_pendingQueue.containsKey(pending.clientToken)) return;
+    if (pending.attempts >= _maxSendAttempts) {
+      _pendingQueue.remove(pending.clientToken);
+      return;
+    }
+
+    pending.attempts += 1;
+
+    _socket!.emitWithAck(
+      'sendMessage',
+      {
+        'from': pending.fromId,
+        'to': pending.toId,
+        'text': pending.text,
+        'clientToken': pending.clientToken,
+      },
+      ack: (dynamic rawAck) {
+        if (rawAck is Map && rawAck['ok'] == true) {
+          _pendingQueue.remove(pending.clientToken);
+          return;
+        }
+
+        if (isConnected) {
+          Future<void>.delayed(const Duration(milliseconds: 800), () {
+            _dispatchPendingMessage(pending);
+          });
+        }
+      },
+    );
+
+    unawaited(
+      Future<void>.delayed(const Duration(seconds: 4), () {
+        if (_pendingQueue.containsKey(pending.clientToken) && isConnected) {
+          _dispatchPendingMessage(pending);
+        }
+      }),
+    );
   }
 
   void listenNewMessages(void Function(Message message) callback) {
     _socket?.on('newMessage', (data) {
-      if (kDebugMode) debugPrint('← Received newMessage payload');
-      if (data is! Map) {
-        if (kDebugMode) debugPrint('⚠ Ignoring malformed newMessage: ${data.runtimeType}');
-        return;
-      }
+      if (data is! Map) return;
       try {
         callback(Message.fromJson(Map<String, dynamic>.from(data)));
-      } on FormatException catch (err) {
-        if (kDebugMode) debugPrint('⚠ Invalid newMessage payload: $err');
+      } on FormatException {
+        return;
       }
     });
   }
 
   void listenUsersChanged(VoidCallback callback) {
     _socket?.off('usersChanged');
-    _socket?.on('usersChanged', (_) {
-      if (kDebugMode) debugPrint('← Received usersChanged event');
-      callback();
-    });
+    _socket?.on('usersChanged', (_) => callback());
   }
 
   void listenConnectionState(void Function(SocketConnectionState state) callback) {
@@ -144,7 +189,6 @@ class SocketService with ChangeNotifier {
 
   @override
   void dispose() {
-    if (kDebugMode) debugPrint('🔌 SocketService disposing...');
     _socket?.off('newMessage');
     _socket?.off('usersChanged');
     _socket?.off('connect');
@@ -154,6 +198,7 @@ class SocketService with ChangeNotifier {
     if (_socket?.connected ?? false) _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
+    _pendingQueue.clear();
     _connectionState = SocketConnectionState.disconnected;
     notifyListeners();
     super.dispose();

@@ -35,6 +35,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+
+  Future<void> _submit(AuthProvider auth, AppLocalizations l10n) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (!_termsAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.termsRequired),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final success = await auth.register(
+      _emailController.text.trim(),
+      _passwordController.text,
+      _nameController.text.trim(),
+      termsAccepted: _termsAccepted,
+      authChannel: 'email',
+    );
+
+    if (success) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.registrationSuccess),
+          backgroundColor: Colors.green,
+        ),
+      );
+      navigator.pop();
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(auth.error ?? l10n.registrationFailed),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -69,6 +115,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   // Name field
                   TextFormField(
                     controller: _nameController,
+                    onFieldSubmitted: (_) => _submit(auth, l10n),
                     decoration: InputDecoration(
                       labelText: l10n.nameLabel,
                       prefixIcon: const Icon(Icons.person_outline),
@@ -89,6 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _submit(auth, l10n),
                     validator: (value) {
                       if (value == null || value.isEmpty) return l10n.emailRequired;
                       if (!value.contains('@')) return l10n.emailInvalid;
@@ -115,6 +163,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     obscureText: _obscurePassword,
                     textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _submit(auth, l10n),
                     validator: (value) {
                       if (value == null || value.isEmpty) return l10n.passwordRequired;
                       if (value.length < 4) return l10n.passwordTooShort;
@@ -187,52 +236,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       width: double.infinity,
                       height: 54,
                       child: ElevatedButton(
-                        onPressed: () async {
-                          if (!_formKey.currentState!.validate()) return;
-                          
-                          // Compliance: require explicit terms acceptance
-                          if (!_termsAccepted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(l10n.termsRequired),
-                                backgroundColor: Colors.red,
-                                duration: const Duration(seconds: 3),
-                              ),
-                            );
-                            return;
-                          }
-
-                          final messenger = ScaffoldMessenger.of(context);
-                          final navigator = Navigator.of(context);
-
-                          final success = await auth.register(
-                            _emailController.text.trim(),
-                            _passwordController.text,
-                            _nameController.text.trim(),
-                            termsAccepted: _termsAccepted,
-                            authChannel: 'email',
-                          );
-
-                          if (success) {
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text(l10n.registrationSuccess),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                            navigator.pop();
-                            return;
-                          }
-
-                          // Show server error or fallback
-                          messenger.showSnackBar(
-                            SnackBar(
-                              content: Text(auth.error ?? l10n.registrationFailed),
-                              backgroundColor: Colors.red,
-                              duration: const Duration(seconds: 4),
-                            ),
-                          );
-                        },
+                        onPressed: () => _submit(auth, l10n),
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 2,

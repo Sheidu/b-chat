@@ -17,6 +17,29 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
+
+  Future<void> _submit(AuthProvider auth, AppLocalizations l10n) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    final success = await auth.login(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
+
+    if (success) return;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(auth.error ?? l10n.loginFailed),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -63,6 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _submit(auth, l10n),
                     validator: (value) {
                       if (value == null || value.isEmpty) return l10n.emailRequired;
                       if (!value.contains('@')) return l10n.emailInvalid;
@@ -88,6 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     obscureText: _obscurePassword,
                     textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _submit(auth, l10n),
                     validator: (value) {
                       if (value == null || value.isEmpty) return l10n.passwordRequired;
                       if (value.length < 4) return l10n.passwordMinLength;
@@ -107,31 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       height: 54,
                       child: ElevatedButton(
-                        onPressed: () async {
-                          if (!_formKey.currentState!.validate()) return;
-                          
-                          final messenger = ScaffoldMessenger.of(context);
-
-                          final success = await auth.login(
-                            _emailController.text.trim(),
-                            _passwordController.text,
-                          );
-
-                          if (success) {
-                            // Navigation handled by main.dart Consumer of AuthProvider
-                            return;
-                          }
-
-                          // Show localized error with fallback
-                          messenger.showSnackBar(
-                            SnackBar(
-                              content: Text(auth.error ?? l10n.loginFailed),
-                              backgroundColor: Colors.red,
-                              duration: const Duration(seconds: 4),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
+                        onPressed: () => _submit(auth, l10n),
                         style: ElevatedButton.styleFrom(
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),

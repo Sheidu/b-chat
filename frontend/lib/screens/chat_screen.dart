@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../models/messages.dart';
 import '../providers/auth_provider.dart';
 import '../services/socket_service.dart';
+import '../services/conversation_message_store.dart';
 
 class ChatScreen extends StatefulWidget {
   final Map<String, dynamic> otherUser; // {id, name, email}
@@ -21,7 +22,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
-  final List<Message> _messages = [];
+  final ConversationMessageStore _messageStore = ConversationMessageStore();
   bool _loadingHistory = true;
   late SocketService _socketService;
   int? _currentUserId;
@@ -61,7 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       setState(() {
-        _upsertIncomingMessage(message);
+        _messageStore.addOrReplace(message);
       });
     });
 
@@ -102,18 +103,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty || _currentUserId == null) return;
     
-    // ✅ Check connection via SocketService state, not local variable
-    if (!_socketService.isConnected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.connectionLost),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-    
     final clientToken = _nextClientToken();
 
     final sent = _socketService.sendMessage(
@@ -123,22 +112,18 @@ class _ChatScreenState extends State<ChatScreen> {
       clientToken: clientToken,
     );
 
-    if (!sent) {
-      debugPrint('Message not sent because socket is disconnected.');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.messageSendFailed),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
+    if (!sent && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.connectionLost),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
 
-    // Optimistic UI update
+    // Optimistic UI update (queued during transient disconnect)
     setState(() {
-      _messages.add(
+      _messageStore.addOrReplace(
         Message.optimistic(
           fromId: _currentUserId!,
           toId: _otherUserId,
@@ -151,34 +136,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.clear();
   }
 
-  void _upsertIncomingMessage(Message incoming) {
-    // Prefer deterministic optimistic reconciliation via client token.
-    final optimisticIndex = incoming.clientToken == null
-        ? -1
-        : _messages.lastIndexWhere(
-            (existing) =>
-                existing.id == null &&
-                existing.clientToken != null &&
-                existing.clientToken == incoming.clientToken,
-          );
-
-    if (optimisticIndex != -1) {
-      _messages[optimisticIndex] = incoming;
-      return;
-    }
-
-    final alreadyPresent = incoming.id != null &&
-        _messages.any((existing) => existing.id == incoming.id);
-    if (!alreadyPresent) {
-      _messages.add(incoming);
-    }
-  }
-
   void _mergeFetchedHistory(List<Message> fetchedHistory) {
     for (final message in fetchedHistory) {
-      _upsertIncomingMessage(message);
+      _messageStore.addOrReplace(message);
     }
-    _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
   }
 
   String _nextClientToken() {
@@ -288,6 +249,17 @@ class _ChatScreenState extends State<ChatScreen> {
             },
           ),
           
+          if (_messageStore.suppressedDuplicates > 0)
+            Container(
+              width: double.infinity,
+              color: Colors.blueGrey[50],
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+              child: Text(
+                'Hidden duplicate messages: ${_messageStore.suppressedDuplicates}',
+                style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
+              ),
+            ),
+
           // Loading state
           if (_loadingHistory)
             Expanded(
@@ -304,7 +276,7 @@ class _ChatScreenState extends State<ChatScreen> {
             )
           else
             Expanded(
-              child: _messages.isEmpty
+              child: _messageStore.items.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -322,9 +294,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   : ListView.builder(
                       reverse: true,
                       padding: const EdgeInsets.all(8),
-                      itemCount: _messages.length,
+                      itemCount: _messageStore.items.length,
                       itemBuilder: (context, index) {
-                        final msg = _messages[_messages.length - 1 - index];
+                        final msg = _messageStore.items[_messageStore.items.length - 1 - index];
                         final isMe = msg.isSentBy(_currentUserId ?? -1);
 
                         return Align(

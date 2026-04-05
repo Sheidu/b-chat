@@ -16,13 +16,16 @@ Backend runs on `http://localhost:3000` by default.
 
 ### Backend structure (current)
 
-`backend/index.js` is now only a composition/bootstrap entrypoint. It wires:
+`backend/index.js` performs explicit startup wiring (env loading, migrations, repositories/services composition, Socket.IO attach, and server listen). `backend/app.js` keeps `createApp()` for Express middleware + route registration.
 
-- `app.js` (Express app + middleware)
+Current runtime helper services used by `index.js` / `app.js`:
+
+- `services/runtime-hardening.service.js` (env file bootstrap + production hardening checks)
+- `services/http-config.service.js` (CORS allowlist parsing/options)
 - `db/connection.js` and `db/migrations.js`
-- `routes/*.routes.js`
-- `services/*.service.js`
 - `repositories/*.repository.js`
+- `services/*.service.js`
+- `routes/*.routes.js`
 - `sockets/chat.socket.js`
 
 All raw SQL is centralized in `backend/repositories/`.
@@ -81,6 +84,7 @@ Use your machine's LAN IP (example `http://192.168.1.25:3000`) when testing from
 - Confirm user list loads.
 - Keep one user logged in, register another user from a second instance, and verify contacts refresh automatically (server emits `usersChanged`, frontend re-fetches `/users`).
 - Send a message and confirm both sender + receiver see realtime updates.
+- Temporarily disconnect network and send a message; it should queue/retry and reconcile via `client_token` once reconnected.
 
 ### Backend quality checks
 
@@ -93,8 +97,8 @@ npm run lint
 ### CI checks
 
 GitHub Actions (`.github/workflows/ci.yml`) now runs:
-- Backend: `npm run lint` + `npm test`
-- Frontend: `flutter analyze` + `flutter test`
+- Backend: `npm run lint` + `npm run test:coverage` with enforced minimum coverage (lines/functions/statements 85%, branches 75%)
+- Frontend: `flutter test --coverage` with enforced minimum line coverage (80%)
 
 ## Notes
 
@@ -239,6 +243,16 @@ Backend now supports:
   - In `strict_ru_email` mode, registration/login via email is limited to `.ru/.рф` domains.
 - `TERMS_VERSION` (default: `2026-03-31`)
   - Stored with user consent metadata on successful registration.
+
+
+
+### Production hardening environment variables
+
+- `CORS_ALLOWLIST` (required in production): comma-separated trusted origins.
+- `SESSION_COOKIE_SECURE`: set to `true` before enabling cookie sessions in production.
+- `MESSAGE_ENCRYPTION_KEY`: must be at least 32 chars in production (startup enforces this).
+
+See `backend/PRODUCTION_HARDENING.md` for full rollout and secret-rotation guidance.
 
 ### Message encryption at rest
 
