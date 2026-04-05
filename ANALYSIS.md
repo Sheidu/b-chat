@@ -1,4 +1,4 @@
-# Repository Analysis (Updated March 29, 2026)
+# Repository Analysis (Updated April 5, 2026)
 
 ## Scope
 This analysis reflects both source review and your first successful local run logs for:
@@ -60,29 +60,46 @@ This analysis reflects both source review and your first successful local run lo
 - IDs in `sendMessage` inserts appear as `2.0`/`1.0` in logs; this is acceptable in SQLite, but can be normalized later if desired.
 
 ## Remaining Risks / Tech Debt
-1. **Message and user payload validation is still uneven**
-   - Core message parsing is typed, but broader API/socket payload validation can be expanded.
+1. **RU auth policy scope is intentionally narrow**
+   - Current implementation supports email-only auth channel.
+   - Policy modes are limited to `strict_ru_email` and `open_email`; there is no multi-channel RU authorization flow yet.
 
-2. **Conversation ordering edge cases**
-   - History merge + realtime updates are reconciled, but tie-breaking strategy for identical timestamps should be explicitly tested.
+2. **Consent evidence is stronger, but governance is still incomplete**
+   - Registration now requires both `termsAccepted=true` and `consentText`, and stores consent evidence hash (`terms_text_hash`) with `terms_url` + version/timestamp.
+   - Still missing: explicit retention policy, export tooling, and legal/archive process for agreement artifacts.
 
-3. **Password migration edge case handling**
-   - New registrations are bcrypt-hashed.
-   - Legacy plaintext rows are only upgraded when users successfully log in.
+3. **Auth abuse controls are baseline-level**
+   - In-memory auth rate limiting is implemented for `/register` and `/login`.
+   - Still missing distributed/persistent throttling (shared cache), account lockout strategy, and alerting on abuse patterns.
 
-4. **Backend test coverage is still minimal**
-   - Initial service/repository unit tests exist, but API-level and edge-case coverage should be expanded.
+4. **Crypto operations are improved but still operationally maturing**
+   - Message encryption supports previous-key decryption for rotation (`MESSAGE_ENCRYPTION_PREVIOUS_KEYS`).
+   - Still missing documented staged key-rotation playbook with rollback monitoring and automated decryption-failure alerts.
 
 ## Recently Resolved
 1. **SQL logging safety**
    - SQL statement logging is now opt-in (`SQL_VERBOSE=1`) and disabled by default.
 
 ## Recommended Next Steps (priority order)
-1. Add message delivery acknowledgements/retry for transient disconnects.
-2. Add API/service validation tests for malformed payloads and boundary cases.
-3. Add frontend widget/integration tests for conversation de-duplication UX.
-4. Add coverage reporting thresholds in CI for backend + frontend.
-5. Add production hardening checks (CORS allowlist, secure cookie/session strategy, secret rotation docs).
+1. **Productionize auth anti-abuse controls**
+   - Replace in-memory limiter with shared-store limiter (Redis or equivalent) for multi-instance deployments.
+   - Add anomaly monitoring and incident thresholds around repeated auth failures.
+
+2. **Formalize consent/audit governance**
+   - Define retention windows and archival/export procedure for `compliance_events` and consent evidence fields.
+   - Add admin/audit query endpoints or ops scripts for evidence retrieval.
+
+3. **Finish crypto rotation operations**
+   - Document key rotation runbook using `MESSAGE_ENCRYPTION_PREVIOUS_KEYS` with rollout/rollback steps.
+   - Add observability for decrypt failures and key-age policy checks.
+
+4. **Expand integration coverage around realtime reliability**
+   - Add socket-level tests for reconnect + retry ACK flows and message order tie-breaks.
+   - Add end-to-end checks for optimistic message replacement and duplicate suppression behavior.
+
+5. **Clarify compliance policy roadmap**
+   - Keep email-only mode explicit in product/legal docs.
+   - If future multi-channel RU authorization is required, document and phase a dedicated implementation plan.
 
 ## Backend Refactor Notes (March 29, 2026)
 
@@ -129,44 +146,49 @@ This analysis reflects both source review and your first successful local run lo
 - Yandex article on website user agreement structure and acceptance mechanics (`https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie`, updated July 29, 2024).
 
 ### Requirement 1: Email registration/login must comply with RU authorization rules
-Status: **NOT COMPLIANT**.
+Status: **PARTIALLY COMPLIANT (implemented for strict RU-email policy path)**.
 
-Findings in code:
-1. Registration accepts any non-empty `email` and `password`; there is no check for RU domain or approved RU authorization method.
-2. Login also accepts arbitrary email values and validates only credentials.
-3. There is no support for alternative legally common RU auth channels (e.g., Gosuslugi/ESIA, RU operator phone, EBS, or approved domestic auth system).
+Latest findings in code:
+1. Registration enforces policy via `validateRegistrationPolicy` in `auth.service`:
+   - supported channel is explicitly email-only;
+   - in `strict_ru_email` mode, only `authChannel='email'` with `.ru/.рф` domains is accepted.
+2. Login enforces `.ru/.рф` domain check in `strict_ru_email` mode before credential validation.
+3. Policy and terms behavior are configurable via env (`REGISTRATION_POLICY`, `TERMS_VERSION`) during backend bootstrap.
+
+Remaining compliance gap:
+- Compliance currently covers only domain-based email policy; broader RU authorization methods are not implemented in this codebase.
 
 ### Requirement 2: Mandatory acceptance of user agreement
-Status: **NOT COMPLIANT**.
+Status: **COMPLIANT for registration flow (with audit improvements still recommended)**.
 
-Findings in code:
-1. Registration UI has no checkbox/consent capture for user agreement acceptance.
-2. Backend registration contract has no `termsAccepted` field and stores no acceptance timestamp/version.
-3. No endpoint or DB field exists for consent audit trail (agreement version, accepted_at, ip/device metadata).
+Latest findings in code:
+1. Frontend registration requires explicit checkbox confirmation before submit (`_termsAccepted` guard + user-facing validation).
+2. Backend registration rejects requests unless both `termsAccepted === true` and non-empty `consentText` are provided.
+3. DB schema stores acceptance metadata in `users` (`terms_version`, `terms_accepted_at`, `terms_url`, `terms_text_hash`).
+4. Compliance audit records are written to `compliance_events` with context fields including IP and User-Agent.
+
+Remaining improvement area:
+- Evidence retrieval/retention operations should be formalized for legal/audit workflows.
 
 ### Questions answered from code review
 1. **Are messages stored somewhere?**
    - Yes. Messages are persisted in SQLite table `messages` via `INSERT INTO messages (from_id, to_id, text, client_token)`.
 2. **Are stored messages encrypted or plain?**
-   - Plain text at application/database layer: message body is stored as `text TEXT NOT NULL` and written/read directly without encryption transform.
-   - Passwords are hashed with bcrypt, but this does not apply to message payloads.
+   - Encrypted at application layer before DB write (AES-256-GCM); decrypted on read.
+   - Passwords are hashed with bcrypt; message payload encryption is handled separately via message crypto service.
 
 ### Minimal remediation checklist
-1. Add registration policy enforcement in backend service:
-   - validate allowed auth channel for RU users;
-   - reject disallowed email identities where policy requires.
-2. Add mandatory terms acceptance in frontend + backend:
-   - `termsAccepted` boolean required at registration;
-   - persist agreement version + accepted timestamp in DB.
-3. Add compliance logging/audit fields for auth + consent events.
-4. Encrypt message content at rest (field-level encryption using managed key) if business/security policy requires confidentiality beyond filesystem controls.
+1. Move auth rate limit from in-memory to shared persistent store for horizontally scaled deployments.
+2. Document + automate key rotation lifecycle using `MESSAGE_ENCRYPTION_PREVIOUS_KEYS`.
+3. Add retention/export operational procedures for consent evidence and compliance events.
+4. Add socket-level integration tests for reconnect/retry ordering edge cases.
 
 ## Documentation update note (March 31, 2026)
 
 The repository docs now explicitly document:
 - where users can read the User Agreement text URL;
 - how to override that URL for production;
-- backend compliance env vars (`REGISTRATION_POLICY`, `TERMS_VERSION`, `MESSAGE_ENCRYPTION_KEY`);
+- backend compliance env vars (`REGISTRATION_POLICY`, `TERMS_VERSION`, `USER_AGREEMENT_URL`, `MESSAGE_ENCRYPTION_KEY`, `MESSAGE_ENCRYPTION_PREVIOUS_KEYS`, auth rate-limit vars);
 - compliance/audit tables and encrypted message storage behavior.
 
 ## Localization Audit (April 4, 2026)

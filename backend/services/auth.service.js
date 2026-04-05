@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
-const SUPPORTED_AUTH_CHANNELS = new Set(['email', 'phone_ru', 'esia', 'biometric']);
+const SUPPORTED_AUTH_CHANNELS = new Set(['email']);
 
 function parseEmailDomain(email) {
   const atIndex = email.lastIndexOf('@');
@@ -12,6 +13,18 @@ function isRuEmailDomain(domain) {
   return domain.endsWith('.ru') || domain.endsWith('.рф');
 }
 
+function isValidEmail(value) {
+  if (typeof value !== 'string') return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
+}
+
+function resolveRegistrationPolicy(policy) {
+  if (policy === 'open_email' || policy === 'strict_ru_email') {
+    return policy;
+  }
+  return 'strict_ru_email';
+}
+
 function buildAuthService({
   usersRepository,
   complianceRepository,
@@ -19,9 +32,11 @@ function buildAuthService({
   onUserRegistered,
   registrationPolicy,
   defaultTermsVersion,
+  userAgreementUrl,
 }) {
-  const resolvedPolicy = registrationPolicy || 'strict_ru_email';
+  const resolvedPolicy = resolveRegistrationPolicy(registrationPolicy);
   const termsVersion = defaultTermsVersion || '2026-03-31';
+  const resolvedUserAgreementUrl = userAgreementUrl || '';
 
   function logComplianceEvent(payload) {
     if (!complianceRepository || typeof complianceRepository.createEvent !== 'function') return;
@@ -33,12 +48,8 @@ function buildAuthService({
       return 'Unsupported auth channel';
     }
 
-    if (resolvedPolicy !== 'strict_ru_email') {
+    if (resolvedPolicy === 'open_email') {
       return null;
-    }
-
-    if (authChannel !== 'email') {
-      return 'Only email channel is currently available';
     }
 
     const domain = parseEmailDomain(email);
@@ -49,11 +60,22 @@ function buildAuthService({
     return null;
   }
 
-  function register({ email, password, name, termsAccepted, authChannel = 'email', context = {} }) {
+  function register({
+    email,
+    password,
+    name,
+    termsAccepted,
+    consentText,
+    authChannel = 'email',
+    context = {},
+  }) {
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
     if (!normalizedEmail || !password) {
       return { status: 400, body: { error: 'Email and password required' } };
+    }
+    if (!isValidEmail(normalizedEmail)) {
+      return { status: 400, body: { error: 'Invalid email format' } };
     }
 
     if (termsAccepted !== true) {
@@ -67,6 +89,10 @@ function buildAuthService({
         userAgent: context.userAgent,
       });
       return { status: 400, body: { error: 'User agreement acceptance is required' } };
+    }
+    const normalizedConsentText = typeof consentText === 'string' ? consentText.trim() : '';
+    if (!normalizedConsentText) {
+      return { status: 400, body: { error: 'Consent text is required' } };
     }
 
     const policyError = validateRegistrationPolicy({ email: normalizedEmail, authChannel });
@@ -91,13 +117,20 @@ function buildAuthService({
     const resolvedName = name || normalizedEmail.split('@')[0];
     const passwordHash = bcrypt.hashSync(password, bcryptSaltRounds);
     const acceptedAt = new Date().toISOString();
+    const termsEvidenceHash = crypto
+      .createHash('sha256')
+      .update(`${termsVersion}|${resolvedUserAgreementUrl}|${normalizedConsentText}`)
+      .digest('hex');
+
     const info = usersRepository.createUser(
       normalizedEmail,
       passwordHash,
       resolvedName,
       authChannel,
       termsVersion,
-      acceptedAt
+      acceptedAt,
+      resolvedUserAgreementUrl,
+      termsEvidenceHash
     );
     const user = {
       id: info.lastInsertRowid,
@@ -106,6 +139,7 @@ function buildAuthService({
       authChannel,
       termsVersion,
       termsAcceptedAt: acceptedAt,
+      termsUrl: resolvedUserAgreementUrl || null,
     };
 
     logComplianceEvent({
@@ -114,6 +148,7 @@ function buildAuthService({
       userId: user.id,
       email: user.email,
       authChannel,
+      reason: `terms_hash:${termsEvidenceHash}`,
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,
     });
@@ -132,8 +167,11 @@ function buildAuthService({
     if (!normalizedEmail || !normalizedPassword) {
       return { status: 400, body: { error: 'Email and password required' } };
     }
+    if (!isValidEmail(normalizedEmail)) {
+      return { status: 400, body: { error: 'Invalid email format' } };
+    }
 
-    if (resolvedPolicy === 'strict_ru_email') {
+    if (resolvedPolicy !== 'open_email') {
       const domain = parseEmailDomain(normalizedEmail);
       if (!isRuEmailDomain(domain)) {
         logComplianceEvent({

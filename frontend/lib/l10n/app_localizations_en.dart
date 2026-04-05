@@ -66,6 +66,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get termsCheckboxSubtitle => 'Required to register an account';
 
   @override
+  String termsProcessingConsent(String ownerName) {
+    return 'I understand that this is a family chat. My messages are stored on the server of $ownerName. I agree to such processing for family purposes.';
+  }
+
+  @override
   String get termsRequired => 'You must accept the User Agreement';
 
   @override

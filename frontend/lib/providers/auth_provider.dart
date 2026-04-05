@@ -20,6 +20,7 @@ class AuthProvider with ChangeNotifier {
     String password,
     String name, {
     required bool termsAccepted,
+    required String consentText,
     String authChannel = 'email',
   }) async {
     _isLoading = true;
@@ -35,6 +36,7 @@ class AuthProvider with ChangeNotifier {
           'password': password,
           'name': name.isEmpty ? null : name,
           'termsAccepted': termsAccepted,
+          'consentText': consentText,
           'authChannel': authChannel,
         }),
       );

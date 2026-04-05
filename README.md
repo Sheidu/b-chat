@@ -36,6 +36,12 @@ If `backend/.env` is missing, backend will auto-create it from `backend/.env.exa
 .env created from .env.example. Please update secrets!
 ```
 
+`backend/.env.example` now includes defaults/placeholders for:
+- compliance/auth (`REGISTRATION_POLICY`, `TERMS_VERSION`, `USER_AGREEMENT_URL`)
+- auth abuse controls (`AUTH_RATE_LIMIT_WINDOW_MS`, `AUTH_RATE_LIMIT_MAX_ATTEMPTS`)
+- message crypto (`MESSAGE_ENCRYPTION_KEY`, `MESSAGE_ENCRYPTION_PREVIOUS_KEYS`)
+- runtime hardening (`CORS_ALLOWLIST`, `SESSION_COOKIE_SECURE`)
+
 ## 2) Start the Flutter frontend
 
 In a second terminal:
@@ -63,6 +69,7 @@ Runtime locale behavior:
 - First launch: app detects system locale
 - If system locale is unsupported, fallback is `ru`
 - User selection is persisted in `SharedPreferences` (`user_locale`) and can be changed from **Settings → Language**
+- Registration consent text is localized and rendered from `termsProcessingConsent(ownerName)` using `CHAT_OWNER_NAME`
 
 ## 3) API base URL configuration (important)
 
@@ -97,7 +104,7 @@ npm run lint
 ### CI checks
 
 GitHub Actions (`.github/workflows/ci.yml`) now runs:
-- Backend: `npm run lint` + `npm run test:coverage` with enforced minimum coverage (lines/functions/statements 85%, branches 75%)
+- Backend: `npm run lint` + `npm run test:coverage` with enforced minimum coverage (lines/statements 85%, functions 80%, branches 75%)
 - Frontend: `flutter test --coverage` with enforced minimum line coverage (80%)
 
 ## Notes
@@ -235,14 +242,25 @@ Frontend registration screen displays this URL. You can override it at build/run
 flutter run --dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement
 ```
 
+Consent text owner placeholder can also be overridden:
+
+```bash
+flutter run --dart-define=CHAT_OWNER_NAME="Family Server Admin"
+```
+
 ### Registration/auth compliance controls (backend)
 
 Backend now supports:
 
 - `REGISTRATION_POLICY` (default: `strict_ru_email`)
   - In `strict_ru_email` mode, registration/login via email is limited to `.ru/.рф` domains.
+  - In `open_email` mode, non-RU email domains are permitted.
 - `TERMS_VERSION` (default: `2026-03-31`)
   - Stored with user consent metadata on successful registration.
+- `USER_AGREEMENT_URL`
+  - Stored with consent evidence for each registration.
+- `AUTH_RATE_LIMIT_WINDOW_MS` and `AUTH_RATE_LIMIT_MAX_ATTEMPTS`
+  - Control auth rate limiting for `/register` and `/login`.
 
 
 
@@ -251,6 +269,7 @@ Backend now supports:
 - `CORS_ALLOWLIST` (required in production): comma-separated trusted origins.
 - `SESSION_COOKIE_SECURE`: set to `true` before enabling cookie sessions in production.
 - `MESSAGE_ENCRYPTION_KEY`: must be at least 32 chars in production (startup enforces this).
+- `MESSAGE_ENCRYPTION_PREVIOUS_KEYS`: comma-separated fallback keys used only for decryption during rotation windows.
 
 See `backend/PRODUCTION_HARDENING.md` for full rollout and secret-rotation guidance.
 
@@ -261,6 +280,8 @@ Backend message text is encrypted in app layer before DB write (AES-256-GCM) and
 - `MESSAGE_ENCRYPTION_KEY`
   - Provide a strong secret in production.
   - If omitted, a development fallback key is used (not suitable for production).
+- `MESSAGE_ENCRYPTION_PREVIOUS_KEYS`
+  - Optional comma-separated previous secrets to keep historical messages decryptable during key rollover.
 
 ### Compliance audit logging
 

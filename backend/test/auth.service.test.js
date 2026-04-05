@@ -51,6 +51,7 @@ test('register hashes password and emits usersChanged hook', () => {
     password: 'plain-secret',
     name: 'Alice',
     termsAccepted: true,
+    consentText: 'consent',
     authChannel: 'email',
   });
 
@@ -81,12 +82,33 @@ test('register rejects missing terms acceptance', () => {
     password: 'plain-secret',
     name: 'Alice',
     termsAccepted: false,
+    consentText: 'consent',
     authChannel: 'email',
   });
 
   assert.equal(result.status, 400);
   assert.equal(result.body.error, 'User agreement acceptance is required');
   assert.equal(complianceRepository.events[0].reason, 'terms_not_accepted');
+});
+
+test('register rejects missing consent text', () => {
+  const authService = buildAuthService({
+    usersRepository: createUsersRepoStub(),
+    complianceRepository: createComplianceRepoStub(),
+    bcryptSaltRounds: 4,
+    registrationPolicy: 'strict_ru_email',
+  });
+
+  const result = authService.register({
+    email: 'alice@example.ru',
+    password: 'plain-secret',
+    termsAccepted: true,
+    consentText: '',
+    authChannel: 'email',
+  });
+
+  assert.equal(result.status, 400);
+  assert.equal(result.body.error, 'Consent text is required');
 });
 
 test('register rejects non-ru email domains in strict mode', () => {
@@ -104,6 +126,7 @@ test('register rejects non-ru email domains in strict mode', () => {
     password: 'plain-secret',
     name: 'Alice',
     termsAccepted: true,
+    consentText: 'consent',
     authChannel: 'email',
   });
 
@@ -186,15 +209,33 @@ test('register rejects malformed payloads and boundary conditions', () => {
   });
 
   assert.equal(
-    authService.register({ email: null, password: 'x', termsAccepted: true, authChannel: 'email' }).status,
+    authService.register({
+      email: null,
+      password: 'x',
+      termsAccepted: true,
+      consentText: 'consent',
+      authChannel: 'email',
+    }).status,
     400
   );
   assert.equal(
-    authService.register({ email: 'valid@example.ru', password: '', termsAccepted: true, authChannel: 'email' }).status,
+    authService.register({
+      email: 'valid@example.ru',
+      password: '',
+      termsAccepted: true,
+      consentText: 'consent',
+      authChannel: 'email',
+    }).status,
     400
   );
   assert.equal(
-    authService.register({ email: 'valid@example.ru', password: 'x', termsAccepted: true, authChannel: 'sms' }).status,
+    authService.register({
+      email: 'valid@example.ru',
+      password: 'x',
+      termsAccepted: true,
+      consentText: 'consent',
+      authChannel: 'sms',
+    }).status,
     400
   );
 });
@@ -210,4 +251,43 @@ test('login rejects malformed payloads', () => {
   assert.equal(authService.login({ email: ' ', password: 'x' }).status, 400);
   assert.equal(authService.login({ email: 'user@example.ru', password: null }).status, 400);
   assert.equal(authService.login({ email: 'user@example.com', password: 'x' }).status, 400);
+});
+
+test('register rejects invalid email format', () => {
+  const authService = buildAuthService({
+    usersRepository: createUsersRepoStub(),
+    complianceRepository: createComplianceRepoStub(),
+    bcryptSaltRounds: 4,
+    registrationPolicy: 'strict_ru_email',
+  });
+
+  const result = authService.register({
+    email: 'not-an-email',
+    password: 'secret',
+    termsAccepted: true,
+    consentText: 'consent',
+    authChannel: 'email',
+  });
+
+  assert.equal(result.status, 400);
+  assert.equal(result.body.error, 'Invalid email format');
+});
+
+test('open_email policy allows non-ru email domains', () => {
+  const authService = buildAuthService({
+    usersRepository: createUsersRepoStub(),
+    complianceRepository: createComplianceRepoStub(),
+    bcryptSaltRounds: 4,
+    registrationPolicy: 'open_email',
+  });
+
+  const result = authService.register({
+    email: 'alice@example.com',
+    password: 'secret',
+    termsAccepted: true,
+    consentText: 'consent',
+    authChannel: 'email',
+  });
+
+  assert.equal(result.status, 200);
 });

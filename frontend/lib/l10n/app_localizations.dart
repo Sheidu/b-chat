@@ -209,6 +209,12 @@ abstract class AppLocalizations {
   /// **'Required to register an account'**
   String get termsCheckboxSubtitle;
 
+  /// No description provided for @termsProcessingConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand that this is a family chat. My messages are stored on the server of {ownerName}. I agree to such processing for family purposes.'**
+  String termsProcessingConsent(String ownerName);
+
   /// No description provided for @termsRequired.
   ///
   /// In en, this message translates to:

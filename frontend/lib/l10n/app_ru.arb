@@ -18,6 +18,7 @@
   "nameLabel": "Имя (необязательно)",
   "termsCheckboxLabel": "Я принимаю Пользовательское соглашение",
   "termsCheckboxSubtitle": "Требуется для регистрации аккаунта",
+  "termsProcessingConsent": "Я понимаю, что это семейный чат. Мои сообщения хранятся на сервере {ownerName}. Я согласен на такую обработку в семейных целях.",
   "termsRequired": "Необходимо принять Пользовательское соглашение",
   "termsViewLink": "Читать полное Пользовательское соглашение →",
   "termsUrlDisplay": "🔗 {agreementUrl}",
@@ -102,6 +103,15 @@
       "agreementUrl": {
         "type": "String",
         "example": "https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie"
+      }
+    }
+  },
+  "@termsProcessingConsent": {
+    "description": "Явный текст согласия для чекбокса регистрации",
+    "placeholders": {
+      "ownerName": {
+        "type": "String",
+        "example": "Александр"
       }
     }
   }
