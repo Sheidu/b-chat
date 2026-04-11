@@ -17,14 +17,14 @@ flutter run -d windows
 
 ## Backend URL configuration
 
-You can override backend URL at runtime:
+Override the backend URL at runtime:
 
 ```bash
 flutter run --dart-define=CHAT_API_BASE_URL=http://<YOUR_IP>:3000
 ```
 
 Default behavior from `lib/config/app_config.dart`:
-- Android: `http://10.0.2.2:3000`
+- Android emulator: `http://10.0.2.2:3000`
 - Web/Desktop/iOS: `http://localhost:3000`
 
 ## Localization (RU/EN)
@@ -49,32 +49,59 @@ If you change ARB strings, regenerate localizations:
 flutter gen-l10n
 ```
 
+## Socket connection model
+
+`SocketService` is a **shared singleton** provided via `MultiProvider` in `main.dart`.
+Both `HomeScreen` and `ChatScreen` consume the same instance from the Provider — neither
+screen creates its own `SocketService()`.
+
+- `HomeScreen` calls `socketService.connect(userId)` after the build phase and subscribes
+  to `usersChanged` events.
+- `ChatScreen` reads the Provider instance via `Provider.of<SocketService>(context, listen: false)`
+  in `initState` and calls `connect` only if not already connected (idempotent).
+- `ChatScreen.dispose()` does **not** call `socketService.dispose()` — the Provider owns
+  the lifecycle.
+
+`Consumer<SocketService>` widgets in `ChatScreen` (AppBar status text and connection banner)
+now correctly reflect the live connection state because they watch the same instance that is
+managing the socket.
+
 ## Expected runtime signals
 
 On successful connection and messaging you should see logs similar to:
 - `Socket connected → user <id>`
 - `Received newMessage: {...}`
 
-These indicate realtime Socket.IO flow is working end-to-end.
-
 ## User Agreement
 
 During registration, users must accept the User Agreement.
 
 Current default URL shown in UI:
-- `https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie`
+```
+https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie
+```
 
-You can override it:
+Override at run/build time:
 
 ```bash
 flutter run --dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement
 ```
 
+Override the consent text owner name:
+
+```bash
+flutter run --dart-define=CHAT_OWNER_NAME="Family Server Admin"
+```
+
+> **Important:** for production use the User Agreement must be hosted at a URL under your
+> own domain and must name the actual data controller for this application.
+
 ## Reliability and UX notes
 
 - Chat send uses Socket.IO acknowledgement with retry queue for transient disconnects.
 - Conversation rendering de-duplicates optimistic/server echoes and suppresses duplicate IDs.
-- Login/Register now submit with Enter key exactly like pressing the action button.
+- Login/Register submit with Enter key exactly like pressing the action button.
+- Connection status is shown in the ChatScreen AppBar and as a banner when disconnected.
 
 ## Tests
 
@@ -82,4 +109,30 @@ flutter run --dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/
 flutter test
 ```
 
-Includes de-duplication store tests and login/register Enter-key submission tests.
+Test coverage includes:
+- `ConversationMessageStore` — optimistic message replacement and duplicate suppression
+- Login/Register — Enter-key submission behaviour
+- Widget tests — login screen render, register screen render, locale provider
+
+## Building for release
+
+### Android APK
+
+```bash
+flutter build apk --release \
+  --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+```
+
+### Android AAB (Play Store)
+
+```bash
+flutter build appbundle --release \
+  --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+```
+
+### Web
+
+```bash
+flutter build web --release \
+  --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+```

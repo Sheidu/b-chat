@@ -1,300 +1,272 @@
 # Deployment and Capacity Guide
 
-This document answers practical planning questions for running **b-chat** for about 20 users, including future media attachments (images/videos/audio/files).
+This document covers practical planning for running **b-chat** for up to 100 users,
+including future media attachments (images/videos/audio/files).
 
-## 1) Database and storage sizing for 20 users
+## 1) Database and storage sizing
 
-## Current state in this repository
+### Current state
 
-- The app currently stores users and text messages in SQLite (`backend/family-chat.db`).
-- Messages currently include only text (`messages.text`) plus metadata (`from_id`, `to_id`, `client_token`, `timestamp`).
-- There is no file/image/video blob column yet, and no object storage integration in current backend routes.
-- Backend runtime is layered:
-  - `index.js` bootstrap/composition
-  - `db/` for connection + migrations
-  - `repositories/` for SQL
-  - `services/` for business logic
-  - `routes/` and `sockets/` for transport
+- Users and text messages are stored in SQLite (`backend/family-chat.db`).
+- Messages include only text plus metadata (`from_id`, `to_id`, `client_token`, `timestamp`).
+- There is no file/image/video blob column and no object storage integration yet.
+- SQLite size today is mostly text + indexes and grows slowly for small user counts.
 
-Because of that, SQLite size today is mostly text + indexes and grows slowly for 20 users.
+### Text-only sizing
 
-## Text-only sizing (current app)
+Quick planning formula:
 
-Quick planning formula for text-only:
+```
+messages_per_day_total × avg_text_bytes × retention_days × 1.3
+```
 
-- `messages_per_day_total × avg_text_bytes × retention_days × 1.3`
-- `1.3` adds overhead for row metadata, indexes, and fragmentation.
+`1.3` adds overhead for row metadata, indexes, and fragmentation.
 
-Example assumptions for 20 users:
-
-- 20 users
-- each sends 100 messages/day on average
-- average 120 bytes/message (short text + punctuation + emoji mix)
+Example for 100 users:
+- 100 users, each sends 50 messages/day on average
+- average 120 bytes/message
 - retention 365 days
 
-Estimated raw text/year:
+```
+100 × 50 × 120 × 365 = 219,000,000 bytes ≈ 209 MB/year
+× 1.3 overhead ≈ 272 MB/year
+```
 
-- `20 × 100 × 120 × 365 = 87,600,000 bytes ≈ 83.5 MB`
+**Recommendation:** reserve **1–2 GB** SQLite disk for the first year.
 
-With overhead (~30%):
+### If you add images/videos/audio/files
 
-- about `108 MB/year`
-
-Practical recommendation for current text-only chat:
-
-- Reserve **0.5-1 GB** SQLite disk for the first year to leave room for growth, backups, and safety margin.
-
-## If you add images/videos/audio/files (recommended approach)
-
-Do **not** store video/image binary blobs directly in SQLite for production use.
+Do **not** store binary blobs in SQLite.
 
 Recommended architecture:
-
 1. Store binaries in object storage (S3/R2/GCS/Azure Blob/MinIO).
-2. Store only metadata + URL/path in DB (sender, recipient, MIME type, size, storage key, created_at).
+2. Store only metadata + URL/path in DB (sender, recipient, MIME type, size, storage key, `created_at`).
 3. Keep CDN in front for delivery and caching.
 
-### Capacity formula for media
+Sample conservative scenario for 100 users/month:
+- 30 images/user @ 1.5 MB = 4,500 images → **6.75 GB/month**
+- 5 short videos/user @ 15 MB = 500 videos → **7.5 GB/month**
+- 40 audio msgs/user @ 0.3 MB = 4,000 audio → **1.2 GB/month**
+- 10 files/user @ 0.5 MB = 1,000 files → **0.5 GB/month**
 
-Monthly attachment storage estimate:
+Total ≈ **16 GB/month**, around **192 GB/year** before deletions.
 
-- `(images_per_month × avg_image_size) + (videos_per_month × avg_video_size) + (audio_messages_per_month × avg_audio_size) + (files_per_month × avg_file_size)`
+**Recommendation with media:** budget **250–500 GB** object storage to start.
+DB metadata only: still well under **5 GB** at this scale.
 
-Then multiply by retention months and add ~15% safety.
+#### Audio-message notes
+- Prefer compressed formats (AAC/Opus) and enforce server-side max duration and size limits.
+- Store only metadata in DB (duration, codec, size, URL/key).
 
-Sample conservative scenario for 20 users:
+---
 
-- 30 images/user/month @ 1.5 MB = `900 images` => `1.35 GB/month`
-- 5 short videos/user/month @ 15 MB = `100 videos` => `1.5 GB/month`
-- 40 audio msgs/user/month @ 0.3 MB (compressed voice notes) = `800 audio` => `0.24 GB/month`
-- 10 files/user/month @ 0.5 MB = `200 files` => `0.1 GB/month`
+## 2) Hosting for web + Android clients
 
-Total ≈ `3.19 GB/month`, around **38 GB/year** before deletions.
-
-Planning recommendation with media enabled:
-
-- Object storage budget: **50-100 GB** to start.
-- DB (metadata only): still usually **<2 GB** for this scale.
-
-### Audio-message specific notes
-
-- Voice notes are usually much smaller than short video clips, but they can still dominate storage if users send many per day.
-- Strongly prefer compressed formats (for example AAC/Opus) and enforce server-side max duration and size limits.
-- Keep audio in object storage and store only metadata in DB (duration, codec, size, URL/key).
-
-## 2) Hosting needed for website + Android clients
-
-## Minimal production topology (good for 20 users)
+### Minimal production topology
 
 1. **Backend API + Socket.IO service**
-   - Node.js server running your `backend/index.js` bootstrap (which composes `app.js`, DB modules, repositories, services, routes, and socket handlers).
-   - Start with 1 small VM/container.
+   - Single Node.js process running `backend/index.js`.
+   - Start with 1 small VM or container.
 
 2. **Database**
-   - For current small scale, SQLite can work if you run a single backend instance and have reliable disk backups.
-   - If you plan multi-instance scaling/high availability later, migrate to PostgreSQL.
+   - SQLite works for a single-instance deployment with reliable disk backups.
+   - For multi-instance scaling or high availability, migrate to PostgreSQL.
 
 3. **Frontend hosting (web)**
    - Build Flutter web assets and host on static hosting/CDN.
 
 4. **TLS + domain**
-   - HTTPS for web.
-   - WSS (secure websocket) for Socket.IO in production.
-   - Ensure websocket upgrade forwarding for `/socket.io`.
+   - HTTPS for web, WSS for Socket.IO.
+   - Ensure the reverse proxy forwards WebSocket upgrades for `/socket.io`.
 
-5. **Object storage** (when attachments are introduced)
+5. **Object storage** (when attachments are added)
    - For image/video/file payloads.
 
-## Sizing recommendation to start
+### Sizing recommendation
 
-- Backend VM/container: **2 vCPU, 2-4 GB RAM**.
-- Disk for backend+SQLite+logs+backups: **20-40 GB** minimum.
-- Static web hosting: any CDN/static host plan is enough.
-- Object storage: start at **50 GB** if media is on.
+| Resource | Recommendation |
+|---|---|
+| Backend VM/container | 2 vCPU, 2–4 GB RAM |
+| Backend disk (DB + logs + backups) | 20–40 GB minimum |
+| Static web hosting | any CDN/static host |
+| Object storage (with media) | start at 250 GB |
 
-## Server storage vs storing messages only on user devices
+---
 
-Short answer: for most chat products, **server-backed storage is preferable**.
+## 3) Steps to open website in browser
 
-### Device-only storage (no server history)
-
-Pros:
-
-- Lower backend storage cost.
-- Potentially less central data to breach.
-
-Cons:
-
-- Users lose history when they reinstall app, switch phone, or lose device.
-- Multi-device sync is hard or impossible.
-- Message delivery/recovery is less reliable when devices are offline.
-- Hard to support legal/compliance/audit requirements if needed later.
-
-### Server-backed storage (recommended baseline)
-
-Pros:
-
-- Reliable history and sync across web + Android (and future iOS/desktop).
-- Better operational control: backups, retention policy, restores.
-- Easier feature growth (search, attachments, moderation, analytics, export).
-
-Cons:
-
-- You must secure infrastructure and data lifecycle.
-- Requires encryption, access controls, monitoring, and backup hygiene.
-
-### Security comparison (important)
-
-- Device-only is **not automatically more secure**; phones can be lost, rooted, malware-infected, or unencrypted.
-- Server-backed can be highly secure if done correctly:
-  - TLS in transit
-  - encryption at rest
-  - strict auth/session controls
-  - least-privilege DB/object-storage access
-  - key rotation + audit logging
-- Highest-security model for private chat is end-to-end encryption, regardless of whether server stores ciphertext.
-
-Practical recommendation for this app: keep server-backed storage, add retention controls, and encrypt media/object storage.
-
-## 3) Steps to open website in browser for this app
-
-The frontend is Flutter and can run/build for web.
-
-### Local development in browser
-
-1. Start backend:
+### Local development
 
 ```bash
+# Terminal 1 — backend
 cd backend
 npm install
 npm start
-```
 
-2. Start frontend in Chrome:
-
-```bash
+# Terminal 2 — frontend
 cd frontend
 flutter pub get
 flutter run -d chrome --dart-define=CHAT_API_BASE_URL=http://localhost:3000
 ```
 
-3. Open the URL printed by Flutter (typically localhost with a random port).
-
-### Production web deployment flow
-
-1. Build web bundle:
+### Production web deployment
 
 ```bash
 cd frontend
-flutter build web --release --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+flutter build web --release \
+  --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com \
+  --dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement \
+  --dart-define=CHAT_OWNER_NAME="Your Name"
 ```
 
-2. Deploy `frontend/build/web/` to static hosting/CDN.
-3. Deploy backend at `https://api.your-domain.com`.
-4. Ensure reverse proxy supports websocket upgrades (`/socket.io`).
-5. Keep CORS restricted to your web domain in production.
+Deploy `frontend/build/web/` to static hosting/CDN.
+Deploy backend at `https://api.your-domain.com`.
+Ensure reverse proxy supports WebSocket upgrades (`/socket.io`).
+Restrict `CORS_ALLOWLIST` to your web domain.
 
-## 4) How to make Android installation package
+---
 
-This Flutter project already includes Android platform scaffolding in `frontend/android/`.
+## 4) Android installation package
 
-### Debug APK (quick internal testing)
+### Debug APK (internal testing)
 
 ```bash
 cd frontend
-flutter pub get
-flutter build apk --debug --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+flutter build apk --debug \
+  --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+# Output: frontend/build/app/outputs/flutter-apk/app-debug.apk
 ```
 
-Output typically:
-
-- `frontend/build/app/outputs/flutter-apk/app-debug.apk`
-
-### Release APK
+### Release APK (sideload)
 
 ```bash
 cd frontend
-flutter build apk --release --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+flutter build apk --release \
+  --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+# Output: frontend/build/app/outputs/flutter-apk/app-release.apk
 ```
 
-Output:
-
-- `frontend/build/app/outputs/flutter-apk/app-release.apk`
-
-### Play Store package (recommended): AAB
+### Play Store package (AAB, recommended)
 
 ```bash
 cd frontend
-flutter build appbundle --release --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+flutter build appbundle --release \
+  --dart-define=CHAT_API_BASE_URL=https://api.your-domain.com
+# Output: frontend/build/app/outputs/bundle/release/app-release.aab
 ```
-
-Output:
-
-- `frontend/build/app/outputs/bundle/release/app-release.aab`
 
 ### Required before publishing release
 
-1. Create/upload-signing keystore.
+1. Create/upload signing keystore.
 2. Configure signing in `frontend/android/app/build.gradle.kts`.
-3. Set proper app id/version in Gradle.
-4. Test release build on physical device.
+3. Set correct `applicationId` and `versionName`/`versionCode`.
+4. Test release build on a physical device.
+
+---
 
 ## 5) Localization deployment checklist (RU/EN)
-
-The frontend ships with Russian and English localization.
 
 Before publishing web/APK/AAB builds:
 
 1. Verify both ARB files are up to date:
    - `frontend/lib/l10n/app_ru.arb`
    - `frontend/lib/l10n/app_en.arb`
+
 2. Regenerate localization outputs:
+   ```bash
+   cd frontend
+   flutter gen-l10n
+   ```
 
-```bash
-cd frontend
-flutter gen-l10n
-```
-
-3. Smoke-test release builds in both languages:
+3. Smoke-test in both languages:
    - Login/Register/Home/Chat/Settings translations
    - Settings language switch
-   - persisted locale after restart
-4. Validate first-run locale behavior:
-   - system `ru` => app `ru`
-   - system `en` => app `en`
-   - unsupported locale => fallback `ru`
+   - Persisted locale after restart
 
-Operational note:
-- Locale preference is stored client-side (`SharedPreferences`, key `user_locale`) and does not require backend state.
+4. Validate first-run locale behavior:
+   - System `ru` → app `ru`
+   - System `en` → app `en`
+   - Unsupported system locale → fallback `ru`
+
+Locale preference is stored client-side (`SharedPreferences`, key `user_locale`) and does not
+require backend state.
 
 ---
 
-## Practical summary
+## 6) Server storage vs device-only storage
 
-- **20 users, text-only:** SQLite disk needs are small (well under 1 GB/year in typical usage).
-- **With media:** storage cost is dominated by object storage, not DB.
-- **Hosting:** one small backend VM + static web hosting + TLS is enough to start.
-- **Web access:** use Flutter web build + hosted backend URL.
-- **Android package:** use `flutter build apk` (testing) and `flutter build appbundle` (Play Store).
+**Recommendation: server-backed storage.**
 
-## Compliance operations notes (registration/auth + consent)
+| | Device-only | Server-backed |
+|---|---|---|
+| History on reinstall | Lost | Preserved |
+| Multi-device sync | Not possible | Works |
+| Offline resilience | Poor | Good (retry queue) |
+| Compliance/audit | Hard | Straightforward |
+| Security risk | Device loss/theft | Must secure infrastructure |
+
+Server-backed can be highly secure with TLS in transit, encryption at rest (AES-256-GCM
+already implemented), strict auth, and key rotation. Device-only is not automatically more
+secure — phones can be lost, rooted, or unencrypted.
+
+---
+
+## 7) Known security limitations (current release)
+
+| Area | Status |
+|---|---|
+| Socket sender identity | ✅ Verified — `data.from` checked against `socket.data.userId` on every `sendMessage` |
+| REST endpoint auth | ⚠️ No token required — `GET /users`, `GET /messages/:fromId/:toId` are open |
+| Auth rate limiting | ✅ In-process limiter on `/register` and `/login` |
+| Message encryption | ✅ AES-256-GCM at rest |
+| Password hashing | ✅ bcrypt |
+| CORS | ✅ Configurable allowlist; blocks all origins if empty |
+| User data deletion | ❌ No endpoint — required for compliance |
+| JWT / session tokens | ❌ Not implemented — planned |
+
+---
+
+## 8) Compliance operations notes
 
 ### User Agreement text source
 
-Default User Agreement URL presented in frontend registration:
-- `https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie`
+Default URL shown in frontend registration:
+```
+https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie
+```
 
-Override for production/legal hosting:
-- Flutter `--dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement`
+> **This must be replaced** with a URL under your own domain before going to production.
+> The agreement must name this application's actual data controller and describe its
+> specific data processing.
+
+Override:
+```bash
+flutter run --dart-define=CHAT_USER_AGREEMENT_URL=https://your-domain.com/legal/user-agreement
+```
 
 ### Backend compliance settings
 
-- `REGISTRATION_POLICY` (`strict_ru_email` by default)
-- `TERMS_VERSION` (stored during registration with consent timestamp)
-- `MESSAGE_ENCRYPTION_KEY` (required to set securely in production)
+| Variable | Default | Description |
+|---|---|---|
+| `REGISTRATION_POLICY` | `strict_ru_email` | `strict_ru_email` or `open_email` |
+| `TERMS_VERSION` | `2026-03-31` | Stored with consent timestamp |
+| `USER_AGREEMENT_URL` | *(see above)* | Stored with consent evidence |
+| `MESSAGE_ENCRYPTION_KEY` | *(dev fallback)* | Must be set securely in production |
 
 ### Tables involved
 
-- `users`: `auth_channel`, `terms_version`, `terms_accepted_at`
-- `compliance_events`: auth/consent audit records (accepted/rejected + reason + request metadata)
-- `messages`: encrypted message payload in `text` column
+| Table | Purpose |
+|---|---|
+| `users` | `auth_channel`, `terms_version`, `terms_accepted_at`, `terms_url`, `terms_text_hash` |
+| `compliance_events` | Auth/consent audit records (accepted/rejected + reason + request metadata) |
+| `messages` | AES-256-GCM encrypted message payload in `text` column |
+
+### Minimal compliance checklist
+
+- [ ] Host User Agreement at your own domain URL
+- [ ] Set `REGISTRATION_POLICY` appropriately for your user base
+- [ ] Set `USER_AGREEMENT_URL` to your hosted agreement
+- [ ] Implement user data deletion endpoint (`DELETE /users/me`)
+- [ ] Add indexes to `compliance_events` on `email` and `created_at`
+- [ ] Define retention period and archival procedure for `compliance_events`
+- [ ] Document and test key rotation procedure for `MESSAGE_ENCRYPTION_KEY`

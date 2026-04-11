@@ -1,7 +1,7 @@
-# Repository Analysis (Updated April 5, 2026)
+# Repository Analysis (Updated April 11, 2026)
 
 ## Scope
-This analysis reflects both source review and your first successful local run logs for:
+This analysis reflects source review, first successful local run logs, and fixes applied on April 11, 2026:
 - Backend (`npm start`)
 - Frontend (`flutter run -d windows`)
 
@@ -26,13 +26,14 @@ This analysis reflects both source review and your first successful local run lo
   - `GET /users`
   - `GET /messages/:fromId/:toId`
 - Socket events:
-  - `join`
-  - `sendMessage`
+  - `join` — authenticates the socket by storing userId in `socket.data.userId`
+  - `sendMessage` — verifies `data.from` matches the socket's authenticated userId
   - server emits `usersChanged` after successful registration
   - server emits `newMessage` after message persist
 
 ### Frontend (`frontend/`)
-- Flutter app with Provider-based auth state (`AuthProvider`).
+- Flutter app with Provider-based state management (`AuthProvider`, `LocaleProvider`, `SocketService`).
+- `SocketService` is a shared singleton provided via `MultiProvider` in `main.dart`. Both `HomeScreen` and `ChatScreen` consume it; neither creates its own instance.
 - API base URL is centralized in `AppConfig` and can be overridden via:
   - `--dart-define=CHAT_API_BASE_URL=http://<host>:3000`
 - Main screens:
@@ -40,13 +41,14 @@ This analysis reflects both source review and your first successful local run lo
   - Register
   - Contacts/Home
   - Chat
+  - Settings (language toggle RU/EN, logout, compliance info)
 
 ## First-Run Validation (from provided logs)
 
 ### What worked
 1. **Backend booted correctly** on port `3000` and created/validated tables.
 2. **Registration worked** (`INSERT INTO users ...`).
-3. **Login worked** (`SELECT * FROM users WHERE email = ? AND password = ?`).
+3. **Login worked** (`SELECT * FROM users WHERE email = ?`).
 4. **Users list loaded** (`SELECT id, email, name FROM users`).
 5. **Message history query worked** (`GET /messages/:fromId/:toId`).
 6. **Realtime transport worked**:
@@ -55,51 +57,127 @@ This analysis reflects both source review and your first successful local run lo
    - Frontend received `newMessage` events.
 
 ### Observations worth documenting
-- Query logging is enabled with SQLite `verbose: console.log`, so SQL statements are printed during runtime.
+- Query logging is opt-in (`SQL_VERBOSE=1`) and disabled by default.
 - The frontend run demonstrates cross-layer integration is functional (auth + history + live messages).
-- IDs in `sendMessage` inserts appear as `2.0`/`1.0` in logs; this is acceptable in SQLite, but can be normalized later if desired.
+- IDs in `sendMessage` inserts appear as `2.0`/`1.0` in logs; this is acceptable in SQLite.
+
+## Fixes Applied (April 11, 2026)
+
+### Fix 1 — ChatScreen dual-SocketService instance bug (frontend)
+
+**File:** `frontend/lib/screens/chat_screen.dart`
+
+**Problem:** `initState` called `_socketService = SocketService()` which created a brand-new,
+orphaned socket instance. The `Consumer<SocketService>` widgets in `build()` read from the
+Provider's shared instance, so the connection-status banner and AppBar indicator were watching
+a different object than the one actually managing the connection. They never reflected real state.
+
+Additionally, `dispose()` called `_socketService.dispose()` on the Provider-owned instance,
+which would have torn down the shared socket for every other screen in the app.
+
+**Fix:**
+- `initState` now calls `Provider.of<SocketService>(context, listen: false)` to obtain the
+  shared instance. A connect is issued only if the socket is not already connected (idempotent).
+- `dispose()` no longer calls `_socketService.dispose()`. The Provider owns the lifecycle.
+
+### Fix 2 — Socket `sendMessage` sender identity not verified (backend)
+
+**File:** `backend/sockets/chat.socket.js`
+
+**Problem:** The `sendMessage` handler trusted the client-supplied `data.from` field without
+any verification. Any connected client could set `from` to another user's ID and send messages
+that appeared to originate from that user.
+
+**Fix:**
+- On `join`: the validated userId is stored in `socket.data.userId`. A second `join` attempt
+  with a different userId disconnects the socket immediately.
+- On `sendMessage`: two guards are checked before the service call:
+  1. The socket must have a stored `userId` (i.e. it called `join` first).
+  2. `data.from` must equal `socket.data.userId`. Mismatches are rejected with
+     `{ ok: false, error: 'Sender identity mismatch' }` and logged.
+- A shared `_parsePositiveInt` helper is extracted at module level for consistent ID validation
+  in both handlers.
 
 ## Remaining Risks / Tech Debt
-1. **RU auth policy scope is intentionally narrow**
-   - Current implementation supports email-only auth channel.
-   - Policy modes are limited to `strict_ru_email` and `open_email`; there is no multi-channel RU authorization flow yet.
 
-2. **Consent evidence is stronger, but governance is still incomplete**
-   - Registration now requires both `termsAccepted=true` and `consentText`, and stores consent evidence hash (`terms_text_hash`) with `terms_url` + version/timestamp.
-   - Still missing: explicit retention policy, export tooling, and legal/archive process for agreement artifacts.
+1. **No auth token / session — HTTP endpoints are unauthenticated**
+   - After login the backend returns `{id, email, name}` but issues no token.
+   - Any HTTP client can call `GET /messages/1/2` or `POST /register` without credentials.
+   - The socket `join`/`sendMessage` identity check mitigates the realtime surface, but the
+     REST layer (`GET /messages`, `GET /users`) remains open.
+   - Minimum fix: signed JWT stored in `SharedPreferences` on the client, validated as
+     `Authorization: Bearer <token>` middleware on protected routes.
 
-3. **Auth abuse controls are baseline-level**
-   - In-memory auth rate limiting is implemented for `/register` and `/login`.
-   - Still missing distributed/persistent throttling (shared cache), account lockout strategy, and alerting on abuse patterns.
+2. **No user data deletion endpoint**
+   - Russian personal data law requires a mechanism for users to request deletion of their data.
+   - No `DELETE /users/:id` or `DELETE /messages` endpoint exists.
 
-4. **Crypto operations are improved but still operationally maturing**
-   - Message encryption supports previous-key decryption for rotation (`MESSAGE_ENCRYPTION_PREVIOUS_KEYS`).
-   - Still missing documented staged key-rotation playbook with rollback monitoring and automated decryption-failure alerts.
+3. **Message pagination not implemented**
+   - `listMessagesBetweenUsers` has no `LIMIT`/`OFFSET`.
+   - For 100 users with months of history this will eventually be slow and load large payloads
+     into memory on every chat open.
 
-## Recently Resolved
-1. **SQL logging safety**
-   - SQL statement logging is now opt-in (`SQL_VERBOSE=1`) and disabled by default.
+4. **Optimistic messages have no timeout / failure state**
+   - If a socket ACK never fires, the optimistic bubble stays in the UI forever with no
+     visual indicator and no way for the user to retry or dismiss.
+
+5. **`compliance_events` table has no indexes**
+   - Audit queries on `email` or `created_at` will do full scans as the table grows.
+   - Add: `CREATE INDEX IF NOT EXISTS idx_compliance_events_email ON compliance_events(email)`
+   - Add: `CREATE INDEX IF NOT EXISTS idx_compliance_events_created_at ON compliance_events(created_at)`
+
+6. **User Agreement URL points to Yandex's document**
+   - The default `USER_AGREEMENT_URL` links to Yandex's own agreement.
+   - A legally valid agreement must be hosted at a URL specific to this application and its
+     actual data controller.
+
+7. **RU auth policy scope is intentionally narrow**
+   - Only `email` auth channel is supported.
+   - Policy modes are limited to `strict_ru_email` and `open_email`.
+
+8. **Consent evidence governance is incomplete**
+   - Retention policy, export tooling, and legal/archive process for agreement artifacts are
+     not defined.
+
+9. **Auth abuse controls are baseline-level**
+   - In-memory rate limiting is implemented for `/register` and `/login`.
+   - Missing: distributed/persistent throttling for multi-instance deployments, account lockout,
+     and alerting on abuse patterns.
+
+10. **Crypto operations are operationally maturing**
+    - Key-rotation playbook using `MESSAGE_ENCRYPTION_PREVIOUS_KEYS` is not documented with
+      rollback monitoring or automated decryption-failure alerts.
 
 ## Recommended Next Steps (priority order)
-1. **Productionize auth anti-abuse controls**
-   - Replace in-memory limiter with shared-store limiter (Redis or equivalent) for multi-instance deployments.
-   - Add anomaly monitoring and incident thresholds around repeated auth failures.
 
-2. **Formalize consent/audit governance**
-   - Define retention windows and archival/export procedure for `compliance_events` and consent evidence fields.
-   - Add admin/audit query endpoints or ops scripts for evidence retrieval.
+1. **Add JWT authentication to REST endpoints**
+   - Issue a signed token on login/register.
+   - Add `Authorization` middleware to `GET /users` and `GET /messages/:fromId/:toId`.
 
-3. **Finish crypto rotation operations**
-   - Document key rotation runbook using `MESSAGE_ENCRYPTION_PREVIOUS_KEYS` with rollout/rollback steps.
-   - Add observability for decrypt failures and key-age policy checks.
+2. **Add user data deletion endpoint**
+   - `DELETE /users/me` — soft-delete or hard-delete user row and associated messages.
+   - Log deletion event in `compliance_events`.
 
-4. **Expand integration coverage around realtime reliability**
-   - Add socket-level tests for reconnect + retry ACK flows and message order tie-breaks.
-   - Add end-to-end checks for optimistic message replacement and duplicate suppression behavior.
+3. **Add message pagination**
+   - Add `?before=<timestamp>&limit=50` query params to `GET /messages/:fromId/:toId`.
+   - Update `listMessagesBetweenUsers` repository method accordingly.
 
-5. **Clarify compliance policy roadmap**
-   - Keep email-only mode explicit in product/legal docs.
-   - If future multi-channel RU authorization is required, document and phase a dedicated implementation plan.
+4. **Add optimistic message failure UI**
+   - After ~10 seconds without ACK, mark the message as failed and offer a retry button.
+
+5. **Productionize auth anti-abuse controls**
+   - Replace in-memory limiter with shared-store limiter (Redis or equivalent).
+
+6. **Formalize consent/audit governance**
+   - Define retention windows and archival/export procedure for `compliance_events`.
+   - Host the User Agreement at a URL under your own domain.
+
+7. **Finish crypto rotation operations**
+   - Document key rotation runbook with rollout/rollback steps.
+   - Add observability for decrypt failures.
+
+8. **Index `compliance_events` table**
+   - Add indexes on `email` and `created_at` in `db/migrations.js`.
 
 ## Backend Refactor Notes (March 29, 2026)
 
@@ -110,105 +188,54 @@ This analysis reflects both source review and your first successful local run lo
 4. Message persistence path moved behind repository + service.
 5. Socket policy is explicit in `chat.socket.js`.
 
-### Why this matters
-- Faster maintenance: smaller files with clear ownership.
-- Safer changes: DB access is centralized and easier to audit.
-- Easier testing: services can be tested with mocked repositories.
-
 ### Confirmed healthy behavior
 1. Backend startup and schema checks are normal (`journal_mode=WAL`, `CREATE TABLE IF NOT EXISTS ...`).
-2. Password migration path worked for a legacy/plaintext user:
-   - `SELECT * FROM users WHERE email = 'bovkunalex@mail.ru'`
-   - `UPDATE users SET password = '<bcrypt hash>' WHERE id = 2`
+2. Password migration path worked for a legacy/plaintext user.
 3. User list and conversation history queries succeeded.
-4. Socket session worked end-to-end:
-   - Connect
-   - Message insert
-   - Frontend receipt of `newMessage`
-
-### Notable log details
-- Values like `2.0` in SQLite write logs are benign numeric formatting from the JS↔SQLite boundary.
-- `/*+28 bytes*/` inside the printed hash value is `better-sqlite3` query-log truncation and does **not** mean the stored hash is corrupted.
-- `Lost connection to device.` appears after Flutter reports successful runtime activity and commonly indicates the desktop app/process was closed or detached, not necessarily a backend/socket failure.
-
-### Likely UX issue observed
-- Sender-side duplicate bubble risk still existed in this run pattern:
-  - Client adds optimistic message immediately.
-  - Server broadcasts same message back via `newMessage`.
-  - Without reconciliation, the sender can see duplicates.
+4. Socket session worked end-to-end: connect → message insert → frontend receipt of `newMessage`.
 
 ## Compliance Audit: Registration/Auth + Message Storage (March 31, 2026)
-
-### Legal baseline reviewed
-- Consultant hotdocs link provided in the task (`https://www.consultant.ru/law/hotdocs/81325.html`).
-  - Note: the public mirror behind that specific URL appears inconsistent and may now resolve to an unrelated hotdocs item in open search indexes.
-- Official publication card for Federal Law No. 406-FZ dated July 31, 2023 (`https://publication.pravo.gov.ru/document/0001202307310022`) introducing Russian user-authorization constraints for site owners.
-- Yandex article on website user agreement structure and acceptance mechanics (`https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie`, updated July 29, 2024).
 
 ### Requirement 1: Email registration/login must comply with RU authorization rules
 Status: **PARTIALLY COMPLIANT (implemented for strict RU-email policy path)**.
 
-Latest findings in code:
 1. Registration enforces policy via `validateRegistrationPolicy` in `auth.service`:
-   - supported channel is explicitly email-only;
-   - in `strict_ru_email` mode, only `authChannel='email'` with `.ru/.рф` domains is accepted.
+   - supported channel is explicitly email-only
+   - in `strict_ru_email` mode, only `authChannel='email'` with `.ru/.рф` domains is accepted
 2. Login enforces `.ru/.рф` domain check in `strict_ru_email` mode before credential validation.
-3. Policy and terms behavior are configurable via env (`REGISTRATION_POLICY`, `TERMS_VERSION`) during backend bootstrap.
+3. Policy and terms behavior are configurable via env (`REGISTRATION_POLICY`, `TERMS_VERSION`).
 
-Remaining compliance gap:
-- Compliance currently covers only domain-based email policy; broader RU authorization methods are not implemented in this codebase.
+Remaining gap: compliance currently covers only domain-based email policy.
 
 ### Requirement 2: Mandatory acceptance of user agreement
-Status: **COMPLIANT for registration flow (with audit improvements still recommended)**.
+Status: **COMPLIANT for registration flow**.
 
-Latest findings in code:
-1. Frontend registration requires explicit checkbox confirmation before submit (`_termsAccepted` guard + user-facing validation).
-2. Backend registration rejects requests unless both `termsAccepted === true` and non-empty `consentText` are provided.
-3. DB schema stores acceptance metadata in `users` (`terms_version`, `terms_accepted_at`, `terms_url`, `terms_text_hash`).
-4. Compliance audit records are written to `compliance_events` with context fields including IP and User-Agent.
+1. Frontend registration requires explicit checkbox confirmation before submit.
+2. Backend registration rejects requests unless both `termsAccepted === true` and non-empty
+   `consentText` are provided.
+3. DB schema stores acceptance metadata (`terms_version`, `terms_accepted_at`, `terms_url`,
+   `terms_text_hash`).
+4. Compliance audit records are written to `compliance_events`.
 
-Remaining improvement area:
-- Evidence retrieval/retention operations should be formalized for legal/audit workflows.
+Remaining gap: evidence retrieval/retention operations are not formalized.
 
-### Questions answered from code review
-1. **Are messages stored somewhere?**
-   - Yes. Messages are persisted in SQLite table `messages` via `INSERT INTO messages (from_id, to_id, text, client_token)`.
-2. **Are stored messages encrypted or plain?**
-   - Encrypted at application layer before DB write (AES-256-GCM); decrypted on read.
-   - Passwords are hashed with bcrypt; message payload encryption is handled separately via message crypto service.
-
-### Minimal remediation checklist
-1. Move auth rate limit from in-memory to shared persistent store for horizontally scaled deployments.
-2. Document + automate key rotation lifecycle using `MESSAGE_ENCRYPTION_PREVIOUS_KEYS`.
-3. Add retention/export operational procedures for consent evidence and compliance events.
-4. Add socket-level integration tests for reconnect/retry ordering edge cases.
-
-## Documentation update note (March 31, 2026)
-
-The repository docs now explicitly document:
-- where users can read the User Agreement text URL;
-- how to override that URL for production;
-- backend compliance env vars (`REGISTRATION_POLICY`, `TERMS_VERSION`, `USER_AGREEMENT_URL`, `MESSAGE_ENCRYPTION_KEY`, `MESSAGE_ENCRYPTION_PREVIOUS_KEYS`, auth rate-limit vars);
-- compliance/audit tables and encrypted message storage behavior.
+### Message storage
+- Messages are persisted in SQLite table `messages`.
+- Encrypted at application layer before DB write (AES-256-GCM); decrypted on read.
+- Passwords are hashed with bcrypt.
 
 ## Localization Audit (April 4, 2026)
 
 ### Status: Implemented and wired end-to-end for RU/EN
 
-Findings:
-1. Flutter localization is enabled in `MaterialApp`:
-   - delegates configured (`AppLocalizations.delegate` + global Flutter delegates)
-   - supported locales declared (`en`, `ru`)
-2. Locale is managed through `LocaleProvider` and loaded before `runApp`:
+1. Flutter localization is enabled in `MaterialApp` with `AppLocalizations.delegate`.
+2. Locale is managed through `LocaleProvider`:
    - persisted key: `user_locale` in `SharedPreferences`
    - first-launch behavior: detect system locale
    - unsupported system locale fallback: `ru`
-3. UI language can be switched at runtime in Settings:
-   - `RadioGroup<Locale>` with RU/EN options
-4. Core user-facing screens consume localized strings:
-   - login, registration, home, chat, settings, common errors/connection states
+3. UI language can be switched at runtime in Settings.
+4. Core user-facing screens consume localized strings.
 5. ARB and generated localization files are present for both RU/EN.
 
 ### Remaining localization risks
-1. Documentation previously did not describe locale fallback and persistence behavior (now updated).
-2. Future string additions require ARB updates + localization regeneration discipline (`flutter gen-l10n`).
+1. Future string additions require ARB updates + `flutter gen-l10n` regeneration.
