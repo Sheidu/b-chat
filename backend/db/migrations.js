@@ -15,13 +15,17 @@ function runMigrations(db) {
       name TEXT,
       auth_channel TEXT NOT NULL DEFAULT 'email',
       terms_version TEXT,
-      terms_accepted_at DATETIME
+      terms_accepted_at DATETIME,
+      terms_url TEXT,
+      terms_text_hash TEXT
     )
   `);
 
   ensureColumn(db, 'users', 'auth_channel', "auth_channel TEXT NOT NULL DEFAULT 'email'");
   ensureColumn(db, 'users', 'terms_version', 'terms_version TEXT');
   ensureColumn(db, 'users', 'terms_accepted_at', 'terms_accepted_at DATETIME');
+  ensureColumn(db, 'users', 'terms_url', 'terms_url TEXT');
+  ensureColumn(db, 'users', 'terms_text_hash', 'terms_text_hash TEXT');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (

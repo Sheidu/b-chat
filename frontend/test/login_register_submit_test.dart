@@ -24,6 +24,7 @@ class FakeAuthProvider extends AuthProvider {
     String password,
     String name, {
     required bool termsAccepted,
+    required String consentText,
     String authChannel = 'email',
   }) async {
     registerCalls += 1;
@@ -75,5 +76,15 @@ void main() {
     await tester.pump();
 
     expect(auth.registerCalls, 1);
+  });
+
+  testWidgets('register screen shows explicit storage consent checkbox text', (tester) async {
+    final auth = FakeAuthProvider();
+    await tester.pumpWidget(wrap(const RegisterScreen(), auth));
+
+    expect(
+      find.textContaining('I understand that this is a family chat.'),
+      findsOneWidget,
+    );
   });
 }

@@ -66,6 +66,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get termsCheckboxSubtitle => 'Требуется для регистрации аккаунта';
 
   @override
+  String termsProcessingConsent(String ownerName) {
+    return 'Я понимаю, что это семейный чат. Мои сообщения хранятся на сервере $ownerName. Я согласен на такую обработку в семейных целях.';
+  }
+
+  @override
   String get termsRequired => 'Необходимо принять Пользовательское соглашение';
 
   @override

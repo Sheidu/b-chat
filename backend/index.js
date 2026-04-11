@@ -15,6 +15,7 @@ const { registerChatSocketHandlers } = require('./sockets/chat.socket');
 const { createMessageCrypto } = require('./security/message-crypto');
 const { ensureEnvFile, runProductionHardeningChecks } = require('./services/runtime-hardening.service');
 const { parseCorsOrigins } = require('./services/http-config.service');
+const { createAuthRateLimitMiddleware } = require('./services/auth-rate-limit.service');
 
 const baseDir = __dirname;
 const envPath = path.join(baseDir, '.env');
@@ -30,6 +31,10 @@ const termsVersion = process.env.TERMS_VERSION || '2026-03-31';
 const corsAllowlist = process.env.CORS_ALLOWLIST || '';
 const sessionCookieSecure = process.env.SESSION_COOKIE_SECURE || 'auto';
 const messageEncryptionKey = process.env.MESSAGE_ENCRYPTION_KEY || '';
+const previousMessageEncryptionKeys = process.env.MESSAGE_ENCRYPTION_PREVIOUS_KEYS || '';
+const userAgreementUrl = process.env.USER_AGREEMENT_URL || '';
+const authRateLimitWindowMs = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 60_000);
+const authRateLimitMaxAttempts = Number(process.env.AUTH_RATE_LIMIT_MAX_ATTEMPTS || 12);
 
 runProductionHardeningChecks({
   nodeEnv: process.env.NODE_ENV,
@@ -48,7 +53,10 @@ runMigrations(db);
 const usersRepository = buildUsersRepository(db);
 const messagesRepository = buildMessagesRepository(db);
 const complianceRepository = buildComplianceRepository(db);
-const messageCrypto = createMessageCrypto({ rawKey: messageEncryptionKey });
+const messageCrypto = createMessageCrypto({
+  rawKey: messageEncryptionKey,
+  previousKeys: previousMessageEncryptionKeys,
+});
 
 const io = new Server({
   cors: {
@@ -64,6 +72,7 @@ const authService = buildAuthService({
   bcryptSaltRounds,
   registrationPolicy,
   defaultTermsVersion: termsVersion,
+  userAgreementUrl,
   onUserRegistered: (user) => {
     io.emit('usersChanged', { type: 'registered', user });
   },
@@ -71,8 +80,18 @@ const authService = buildAuthService({
 
 const usersService = buildUsersService({ usersRepository });
 const messagesService = buildMessagesService({ messagesRepository, messageCrypto });
+const authRateLimitMiddleware = createAuthRateLimitMiddleware({
+  windowMs: authRateLimitWindowMs,
+  maxAttempts: authRateLimitMaxAttempts,
+});
 
-const app = createApp({ authService, usersService, messagesService, corsAllowlist });
+const app = createApp({
+  authService,
+  usersService,
+  messagesService,
+  corsAllowlist,
+  authRateLimitMiddleware,
+});
 const server = http.createServer(app);
 io.attach(server);
 

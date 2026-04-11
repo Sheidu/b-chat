@@ -52,12 +52,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final consentText = l10n.termsProcessingConsent(AppConfig.chatOwnerName);
 
     final success = await auth.register(
       _emailController.text.trim(),
       _passwordController.text,
       _nameController.text.trim(),
       termsAccepted: _termsAccepted,
+      consentText: consentText,
       authChannel: 'email',
     );
 
@@ -177,21 +179,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     value: _termsAccepted,
                     contentPadding: EdgeInsets.zero,
                     controlAffinity: ListTileControlAffinity.leading,
-                    title: RichText(
-                      text: TextSpan(
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14),
-                        children: [
-                          TextSpan(text: l10n.termsCheckboxLabel),
-                          TextSpan(
-                            text: ' *',
-                            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                    subtitle: Text(
-                      l10n.termsCheckboxSubtitle,
-                      style: const TextStyle(fontSize: 12),
+                    title: Text(
+                      '${l10n.termsProcessingConsent(AppConfig.chatOwnerName)} *',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14),
                     ),
                     onChanged: (value) => setState(() => _termsAccepted = value == true),
                   ),

@@ -12,6 +12,10 @@ class AppConfig {
     'CHAT_USER_AGREEMENT_URL',
     defaultValue: '',
   );
+  static const String _chatOwnerName = String.fromEnvironment(
+    'CHAT_OWNER_NAME',
+    defaultValue: 'ваше имя',
+  );
 
   static String get baseUrl {
     if (_overrideBaseUrl.isNotEmpty) return _overrideBaseUrl;
@@ -30,4 +34,6 @@ class AppConfig {
     if (_overrideUserAgreementUrl.isNotEmpty) return _overrideUserAgreementUrl;
     return 'https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie';
   }
+
+  static String get chatOwnerName => _chatOwnerName;
 }

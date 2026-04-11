@@ -18,6 +18,7 @@
   "nameLabel": "Name (optional)",
   "termsCheckboxLabel": "I accept the User Agreement",
   "termsCheckboxSubtitle": "Required to register an account",
+  "termsProcessingConsent": "I understand that this is a family chat. My messages are stored on the server of {ownerName}. I agree to such processing for family purposes.",
   "termsRequired": "You must accept the User Agreement",
   "termsViewLink": "Read full User Agreement →",
   "termsUrlDisplay": "🔗 {agreementUrl}",
@@ -102,6 +103,15 @@
       "agreementUrl": {
         "type": "String",
         "example": "https://direct.yandex.ru/base/articles/polzovatelskoe-soglashenie"
+      }
+    }
+  },
+  "@termsProcessingConsent": {
+    "description": "Explicit consent text shown in registration checkbox",
+    "placeholders": {
+      "ownerName": {
+        "type": "String",
+        "example": "Alex"
       }
     }
   }
