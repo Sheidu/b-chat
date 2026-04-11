@@ -50,8 +50,11 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    _socketService = SocketService();
-    _socketService.connect(_currentUserId!);
+    _socketService = Provider.of<SocketService>(context, listen: false);
+    // Connect if not already connected (idempotent).
+    if (!_socketService.isConnected) {
+      _socketService.connect(_currentUserId!);
+    }
     
     // ✅ Connection state is now read via Consumer<SocketService> in build()    
     _socketService.listenNewMessages((message) {
@@ -178,7 +181,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    _socketService.dispose();
+    // Do NOT dispose _socketService here — it is owned by the Provider
+    // and shared with HomeScreen. Only clean up what this screen owns.
     _messageController.dispose();
     super.dispose();
   }
