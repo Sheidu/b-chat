@@ -209,7 +209,7 @@ abstract class AppLocalizations {
   /// **'Required to register an account'**
   String get termsCheckboxSubtitle;
 
-  /// No description provided for @termsProcessingConsent.
+  /// Explicit consent text shown in registration checkbox
   ///
   /// In en, this message translates to:
   /// **'I understand that this is a family chat. My messages are stored on the server of {ownerName}. I agree to such processing for family purposes.'**
@@ -448,6 +448,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Russian'**
   String get languageRussian;
+
+  /// No description provided for @addContactButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Contact'**
+  String get addContactButton;
+
+  /// No description provided for @addContactDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add contact'**
+  String get addContactDialogTitle;
+
+  /// No description provided for @nicknameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Nickname (optional)'**
+  String get nicknameLabel;
+
+  /// No description provided for @cancelButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancelButton;
+
+  /// No description provided for @addButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get addButton;
+
+  /// Error message when adding contact fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to add contact: {error}'**
+  String failedToAddContact(String error);
+
+  /// No description provided for @discoverUsersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover users'**
+  String get discoverUsersTitle;
+
+  /// No description provided for @searchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name, email, or phone'**
+  String get searchHint;
+
+  /// No description provided for @noUsersFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No users found'**
+  String get noUsersFound;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

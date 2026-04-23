@@ -58,6 +58,15 @@
   "appVersion": "Версия {version}",
   "languageEnglish": "English",
   "languageRussian": "Русский",
+  "addContactButton": "Добавить контакт",
+  "addContactDialogTitle": "Добавить контакт",
+  "nicknameLabel": "Псевдоним (необязательно)",
+  "cancelButton": "Отмена",
+  "addButton": "Добавить",
+  "failedToAddContact": "Не удалось добавить контакт: {error}",
+  "discoverUsersTitle": "Поиск пользователей",
+  "searchHint": "Поиск по имени, email или телефону",
+  "noUsersFound": "Пользователи не найдены",
   "@appName": {
     "description": "Название приложения в заголовке"
   },
@@ -112,6 +121,15 @@
       "ownerName": {
         "type": "String",
         "example": "Александр"
+      }
+    }
+  },
+  "@failedToAddContact": {
+    "description": "Сообщение об ошибке при добавлении контакта",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Ошибка сервера"
       }
     }
   }

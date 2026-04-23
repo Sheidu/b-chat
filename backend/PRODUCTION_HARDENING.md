@@ -10,57 +10,33 @@ CORS_ALLOWLIST=https://chat.example.com,https://admin.example.com
 
 In production, backend startup fails when this allowlist is empty.
 
-In development, omitting `CORS_ALLOWLIST` sets `origin: false` which blocks all cross-origin
-requests, including `flutter run -d chrome`. Set it explicitly for local web development:
+## REST endpoint authentication (implemented)
 
-```bash
-CORS_ALLOWLIST=http://localhost:3000,http://localhost:8080
-```
+Protected HTTP routes now require JWT bearer auth:
 
-## Socket identity verification
+- `GET /users`
+- `GET /users/discover`
+- `POST /users/contacts`
+- `GET /messages/:fromId/:toId`
+- `DELETE /users/me`
 
-The socket `sendMessage` handler now verifies that `data.from` matches the userId stored on
-the socket at `join` time. This prevents any connected client from forging messages as another
-user.
+JWT settings:
 
-The `join` handler:
-- Validates the userId is a positive integer; disconnects the socket if not.
-- Stores the value in `socket.data.userId`.
-- Disconnects the socket if a second `join` is attempted with a different userId.
+- `JWT_SECRET` (required in production, 16+ chars)
+- `JWT_EXPIRES_IN` (default `7d`, supports `s/m/h/d` suffix, e.g. `12h`)
 
-The `sendMessage` handler:
-- Rejects the event with `Not authenticated` if the socket has no stored userId.
-- Rejects the event with `Sender identity mismatch` if `data.from` does not equal the
-  stored userId, and logs the attempt.
+`POST /register` and `POST /login` return `token` in the response body.
+Registration additionally requires `phoneNumber`.
 
-> **Limitation:** this is a lightweight trust model. The socket accepts the client-supplied
-> userId at `join` time without cryptographic proof. For stronger guarantees, validate a
-> signed JWT at `join` instead of trusting the raw value. This is the recommended next step.
+## User deletion endpoint (implemented)
 
-## REST endpoint authentication (planned)
+`DELETE /users/me` deletes messages and contacts for current user and writes a `delete`
+entry into `compliance_events`.
 
-The HTTP endpoints (`GET /users`, `GET /messages/:fromId/:toId`) do not currently require
-a token. Any HTTP client that knows valid user IDs can read conversation history.
+Mode control:
 
-Planned fix:
-1. Issue a signed JWT on `/login` and `/register`.
-2. Add `Authorization: Bearer <token>` middleware to all protected routes.
-3. Store the token in `SharedPreferences` on the Flutter client and attach it to every
-   HTTP request.
-
-Until this is implemented, restrict network access to trusted clients at the infrastructure
-level (firewall, VPN, private network).
-
-## Secure cookie/session strategy
-
-This project currently uses stateless API auth responses (no server-issued cookie session yet).
-
-When introducing cookie sessions/JWT cookies in production:
-
-1. Set `SESSION_COOKIE_SECURE=true`.
-2. Use `HttpOnly`, `Secure`, and `SameSite=Lax` (or `Strict`) cookie flags.
-3. Keep session TTL short and rotate session identifiers on login.
-4. Separate session signing/encryption keys from message encryption keys.
+- `HARD_DELETE_USERS=0` (default): soft-delete user row (`users.deleted_at`) + hard-delete messages/contacts
+- `HARD_DELETE_USERS=1`: hard-delete user row + messages/contacts
 
 ## Auth abuse controls
 
@@ -69,69 +45,49 @@ Auth endpoints are rate-limited in-process using:
 - `AUTH_RATE_LIMIT_WINDOW_MS` (default `60000`)
 - `AUTH_RATE_LIMIT_MAX_ATTEMPTS` (default `12`)
 
-For multi-instance deployments, replace or supplement this with a shared limiter backend
-(e.g. Redis) so limits are enforced cluster-wide.
+## Message crypto key rotation runbook (rollout + rollback)
 
-## Consent evidence configuration
+### Rollout
 
-Set `USER_AGREEMENT_URL` to the canonical legal page used during registration. This URL is
-stored with consent evidence (`terms_url`) and should:
-- be hosted at a URL under your own domain
-- name this application's actual data controller
-- describe the specific data processing performed by this application
-
-The current default (`https://direct.yandex.ru/...`) points to Yandex's own agreement and
-is **not legally valid** for this application in production.
-
-## Secret rotation
-
-Rotate secrets regularly and after any suspected leak:
-
-- `MESSAGE_ENCRYPTION_KEY`
-- `MESSAGE_ENCRYPTION_PREVIOUS_KEYS` (temporary rollover set)
-- Any future session/JWT signing keys
-- DB credentials (if moved off SQLite)
-
-Recommended process:
-
-1. Generate a new 32+ character secret in your secret manager.
+1. Generate new 32+ char key in secret manager.
 2. Deploy backend with:
    - `MESSAGE_ENCRYPTION_KEY=<new key>`
    - `MESSAGE_ENCRYPTION_PREVIOUS_KEYS=<old key[,older key...]>`
-3. Confirm active traffic can decrypt/validate using new key.
-4. Remove old key(s) from `MESSAGE_ENCRYPTION_PREVIOUS_KEYS` after rollover window and
-   restart all instances.
-5. Record rotation date in your operations runbook.
+3. Verify live message reads/writes succeed.
+4. Watch logs for decrypt errors (`[messages] decrypt failed`).
+5. Keep previous keys during defined rollover window.
+6. After window, remove old keys from `MESSAGE_ENCRYPTION_PREVIOUS_KEYS` and redeploy.
 
-## Database indexes for compliance_events
+### Rollback
 
-The `compliance_events` table currently has no indexes. As the table grows, audit queries
-on `email` or `created_at` will do full scans. Add the following to `db/migrations.js`:
+1. If decrypt failures spike after rollout, revert to prior env set immediately:
+   - `MESSAGE_ENCRYPTION_KEY=<previous primary key>`
+   - `MESSAGE_ENCRYPTION_PREVIOUS_KEYS=<known older keys>`
+2. Redeploy all instances.
+3. Confirm decrypt failure logs stop increasing.
+4. Open incident report and capture affected message IDs from logs/compliance events.
 
-```js
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_compliance_events_email
-  ON compliance_events(email)
-`);
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_compliance_events_created_at
-  ON compliance_events(created_at)
-`);
-```
+## Decrypt failure observability (implemented)
 
-## User data deletion (compliance requirement)
+When decryption fails in message history reads, backend now:
 
-Russian personal data law requires a mechanism for users to request deletion of their data.
-No deletion endpoint currently exists. The planned implementation:
+1. Logs structured error context with message id + participants.
+2. Writes `decrypt_failure` events into `compliance_events`.
+3. Returns placeholder text (`[Unable to decrypt message]`) with `decrypt_failed: true`.
 
-- `DELETE /users/me` — requires valid auth token (once JWT is implemented)
-- Hard-delete or soft-delete the user row and associated messages
-- Write a `delete` event to `compliance_events` with timestamp and reason
-- Revoke/invalidate the user's session/token
+Recommended alert rule: trigger when decrypt failures exceed baseline in a 5-minute window.
+
+## Database indexes for compliance_events (implemented)
+
+Migrations now create:
+
+- `idx_compliance_events_email`
+- `idx_compliance_events_created_at`
 
 ## SQL logging
 
 SQL query logging is controlled by `SQL_VERBOSE`:
+
 - `SQL_VERBOSE=1` — enable (prints emails and query text to stdout)
 - any other value or unset — disabled (default)
 

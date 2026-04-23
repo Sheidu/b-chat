@@ -18,6 +18,14 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
 }
 
+function normalizePhoneNumber(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\+?[0-9][0-9\-\s()]{5,24}$/.test(trimmed)) return null;
+  return trimmed;
+}
+
 function resolveRegistrationPolicy(policy) {
   if (policy === 'open_email' || policy === 'strict_ru_email') {
     return policy;
@@ -28,6 +36,7 @@ function resolveRegistrationPolicy(policy) {
 function buildAuthService({
   usersRepository,
   complianceRepository,
+  jwtAuthService,
   bcryptSaltRounds,
   onUserRegistered,
   registrationPolicy,
@@ -41,6 +50,17 @@ function buildAuthService({
   function logComplianceEvent(payload) {
     if (!complianceRepository || typeof complianceRepository.createEvent !== 'function') return;
     complianceRepository.createEvent(payload);
+  }
+
+  function withToken(user) {
+    if (!jwtAuthService || typeof jwtAuthService.issueToken !== 'function') {
+      return user;
+    }
+
+    return {
+      ...user,
+      token: jwtAuthService.issueToken(user),
+    };
   }
 
   function validateRegistrationPolicy({ email, authChannel }) {
@@ -63,6 +83,7 @@ function buildAuthService({
   function register({
     email,
     password,
+    phoneNumber,
     name,
     termsAccepted,
     consentText,
@@ -74,6 +95,12 @@ function buildAuthService({
     if (!normalizedEmail || !password) {
       return { status: 400, body: { error: 'Email and password required' } };
     }
+
+    const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+    if (!normalizedPhoneNumber) {
+      return { status: 400, body: { error: 'Valid phone number is required' } };
+    }
+
     if (!isValidEmail(normalizedEmail)) {
       return { status: 400, body: { error: 'Invalid email format' } };
     }
@@ -90,6 +117,7 @@ function buildAuthService({
       });
       return { status: 400, body: { error: 'User agreement acceptance is required' } };
     }
+
     const normalizedConsentText = typeof consentText === 'string' ? consentText.trim() : '';
     if (!normalizedConsentText) {
       return { status: 400, body: { error: 'Consent text is required' } };
@@ -124,6 +152,7 @@ function buildAuthService({
 
     const info = usersRepository.createUser(
       normalizedEmail,
+      normalizedPhoneNumber,
       passwordHash,
       resolvedName,
       authChannel,
@@ -132,9 +161,11 @@ function buildAuthService({
       resolvedUserAgreementUrl,
       termsEvidenceHash
     );
+
     const user = {
       id: info.lastInsertRowid,
       email: normalizedEmail,
+      phoneNumber: normalizedPhoneNumber,
       name: resolvedName,
       authChannel,
       termsVersion,
@@ -157,7 +188,7 @@ function buildAuthService({
       onUserRegistered(user);
     }
 
-    return { status: 200, body: user };
+    return { status: 200, body: withToken(user) };
   }
 
   function login({ email, password, context = {} }) {
@@ -188,7 +219,7 @@ function buildAuthService({
     }
 
     const user = usersRepository.findUserByEmail(normalizedEmail);
-    if (!user) {
+    if (!user || user.deleted_at) {
       return { status: 401, body: { error: 'Invalid email or password' } };
     }
 
@@ -232,12 +263,13 @@ function buildAuthService({
 
     return {
       status: 200,
-      body: {
+      body: withToken({
         id: user.id,
         email: user.email,
+        phoneNumber: user.phone_number || null,
         name: user.name,
         authChannel: user.auth_channel || 'email',
-      },
+      }),
     };
   }
 

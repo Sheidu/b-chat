@@ -28,7 +28,7 @@ test('register hashes password and emits usersChanged hook', () => {
   let savedHash = null;
 
   const usersRepository = createUsersRepoStub({
-    createUser: (_email, passwordHash) => {
+    createUser: (_email, _phone, passwordHash) => {
       savedHash = passwordHash;
       return { lastInsertRowid: 77 };
     },
@@ -41,6 +41,7 @@ test('register hashes password and emits usersChanged hook', () => {
     complianceRepository,
     bcryptSaltRounds: 4,
     registrationPolicy: 'strict_ru_email',
+    jwtAuthService: { issueToken: () => 'test-jwt' },
     onUserRegistered: (user) => {
       emittedUser = user;
     },
@@ -49,6 +50,7 @@ test('register hashes password and emits usersChanged hook', () => {
   const result = authService.register({
     email: 'alice@example.ru',
     password: 'plain-secret',
+    phoneNumber: '+15551234567',
     name: 'Alice',
     termsAccepted: true,
     consentText: 'consent',
@@ -61,7 +63,9 @@ test('register hashes password and emits usersChanged hook', () => {
   assert.equal(result.body.name, 'Alice');
   assert.ok(savedHash.startsWith('$2'));
   assert.notEqual(savedHash, 'plain-secret');
-  assert.deepEqual(emittedUser, result.body);
+  assert.equal(result.body.token, 'test-jwt');
+  assert.equal(emittedUser.id, result.body.id);
+  assert.equal(emittedUser.email, result.body.email);
   assert.equal(complianceRepository.events.length, 1);
   assert.equal(complianceRepository.events[0].status, 'accepted');
 });
@@ -80,6 +84,7 @@ test('register rejects missing terms acceptance', () => {
   const result = authService.register({
     email: 'alice@example.ru',
     password: 'plain-secret',
+    phoneNumber: '+15551234567',
     name: 'Alice',
     termsAccepted: false,
     consentText: 'consent',
@@ -102,6 +107,7 @@ test('register rejects missing consent text', () => {
   const result = authService.register({
     email: 'alice@example.ru',
     password: 'plain-secret',
+    phoneNumber: '+15551234567',
     termsAccepted: true,
     consentText: '',
     authChannel: 'email',
@@ -124,6 +130,7 @@ test('register rejects non-ru email domains in strict mode', () => {
   const result = authService.register({
     email: 'alice@example.com',
     password: 'plain-secret',
+    phoneNumber: '+15551234567',
     name: 'Alice',
     termsAccepted: true,
     consentText: 'consent',
@@ -212,6 +219,7 @@ test('register rejects malformed payloads and boundary conditions', () => {
     authService.register({
       email: null,
       password: 'x',
+      phoneNumber: '+15551234567',
       termsAccepted: true,
       consentText: 'consent',
       authChannel: 'email',
@@ -222,6 +230,7 @@ test('register rejects malformed payloads and boundary conditions', () => {
     authService.register({
       email: 'valid@example.ru',
       password: '',
+      phoneNumber: '+15551234567',
       termsAccepted: true,
       consentText: 'consent',
       authChannel: 'email',
@@ -232,6 +241,7 @@ test('register rejects malformed payloads and boundary conditions', () => {
     authService.register({
       email: 'valid@example.ru',
       password: 'x',
+      phoneNumber: '+15551234567',
       termsAccepted: true,
       consentText: 'consent',
       authChannel: 'sms',
@@ -264,6 +274,7 @@ test('register rejects invalid email format', () => {
   const result = authService.register({
     email: 'not-an-email',
     password: 'secret',
+    phoneNumber: '+15551234567',
     termsAccepted: true,
     consentText: 'consent',
     authChannel: 'email',
@@ -284,10 +295,33 @@ test('open_email policy allows non-ru email domains', () => {
   const result = authService.register({
     email: 'alice@example.com',
     password: 'secret',
+    phoneNumber: '+15551234567',
     termsAccepted: true,
     consentText: 'consent',
     authChannel: 'email',
   });
 
   assert.equal(result.status, 200);
+});
+
+
+test('register requires phone number', () => {
+  const authService = buildAuthService({
+    usersRepository: createUsersRepoStub(),
+    complianceRepository: createComplianceRepoStub(),
+    bcryptSaltRounds: 4,
+    registrationPolicy: 'strict_ru_email',
+  });
+
+  const result = authService.register({
+    email: 'alice@example.ru',
+    password: 'secret',
+    phoneNumber: '',
+    termsAccepted: true,
+    consentText: 'consent',
+    authChannel: 'email',
+  });
+
+  assert.equal(result.status, 400);
+  assert.equal(result.body.error, 'Valid phone number is required');
 });

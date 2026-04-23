@@ -1,4 +1,15 @@
-# Repository Analysis (Updated April 11, 2026)
+# Repository Analysis (Updated April 23, 2026)
+
+## April 23, 2026 implementation update
+
+Implemented in this iteration:
+- JWT issuance on `/register` and `/login`, plus middleware for protected REST routes.
+- Message history pagination (`before`, `limit<=50`) and repository query changes.
+- `compliance_events` indexes on `email` and `created_at`.
+- Decrypt failure observability (`decrypt_failure` compliance events + logs).
+- User deletion endpoint `DELETE /users/me` (soft/hard delete modes).
+- Optimistic message timeout/failure UI with retry action in Flutter chat screen.
+- Per-user contact lists backed by `contacts` table.
 
 ## Scope
 This analysis reflects source review, first successful local run logs, and fixes applied on April 11, 2026:

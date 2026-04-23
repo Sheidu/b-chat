@@ -50,7 +50,6 @@ function registerChatSocketHandlers({ io, messagesService }) {
         }
         return;
       }
-1
       try {
         const result = messagesService.createMessage({ from, to, text, clientToken });
         if (result.status >= 400) {

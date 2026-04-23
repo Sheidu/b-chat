@@ -30,4 +30,16 @@ class ConversationMessageStore {
     _messages.add(incoming);
     _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
   }
+
+  void markFailedByClientToken(String clientToken) {
+    final index = _messages.lastIndexWhere((message) => message.clientToken == clientToken);
+    if (index == -1) return;
+    _messages[index] = _messages[index].copyWith(localState: LocalDeliveryState.failed);
+  }
+
+  Message? removeByClientToken(String clientToken) {
+    final index = _messages.lastIndexWhere((message) => message.clientToken == clientToken);
+    if (index == -1) return null;
+    return _messages.removeAt(index);
+  }
 }
