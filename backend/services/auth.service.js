@@ -28,6 +28,7 @@ function resolveRegistrationPolicy(policy) {
 function buildAuthService({
   usersRepository,
   complianceRepository,
+  jwtAuthService,
   bcryptSaltRounds,
   onUserRegistered,
   registrationPolicy,
@@ -41,6 +42,17 @@ function buildAuthService({
   function logComplianceEvent(payload) {
     if (!complianceRepository || typeof complianceRepository.createEvent !== 'function') return;
     complianceRepository.createEvent(payload);
+  }
+
+  function withToken(user) {
+    if (!jwtAuthService || typeof jwtAuthService.issueToken !== 'function') {
+      return user;
+    }
+
+    return {
+      ...user,
+      token: jwtAuthService.issueToken(user),
+    };
   }
 
   function validateRegistrationPolicy({ email, authChannel }) {
@@ -142,6 +154,10 @@ function buildAuthService({
       termsUrl: resolvedUserAgreementUrl || null,
     };
 
+    if (typeof usersRepository.seedContactsForUser === 'function') {
+      usersRepository.seedContactsForUser(user.id);
+    }
+
     logComplianceEvent({
       eventType: 'register',
       status: 'accepted',
@@ -157,7 +173,7 @@ function buildAuthService({
       onUserRegistered(user);
     }
 
-    return { status: 200, body: user };
+    return { status: 200, body: withToken(user) };
   }
 
   function login({ email, password, context = {} }) {
@@ -188,7 +204,7 @@ function buildAuthService({
     }
 
     const user = usersRepository.findUserByEmail(normalizedEmail);
-    if (!user) {
+    if (!user || user.deleted_at) {
       return { status: 401, body: { error: 'Invalid email or password' } };
     }
 
@@ -232,12 +248,12 @@ function buildAuthService({
 
     return {
       status: 200,
-      body: {
+      body: withToken({
         id: user.id,
         email: user.email,
         name: user.name,
         authChannel: user.auth_channel || 'email',
-      },
+      }),
     };
   }
 

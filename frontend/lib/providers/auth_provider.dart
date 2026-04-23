@@ -5,15 +5,22 @@ import '../config/app_config.dart';
 
 class AuthProvider with ChangeNotifier {
   Map<String, dynamic>? _user; // {id, email, name}
+  String? _token;
   bool _isLoading = false;
   String? _error;
 
   Map<String, dynamic>? get user => _user;
+  String? get token => _token;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isLoggedIn => _user != null;
+  bool get isLoggedIn => _user != null && _token != null;
 
   String get baseUrl => AppConfig.baseUrl;
+
+  Map<String, String> get authJsonHeaders => {
+        'Content-Type': 'application/json',
+        if (_token != null) 'Authorization': 'Bearer $_token',
+      };
 
   Future<bool> register(
     String email,
@@ -42,7 +49,14 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        _user = jsonDecode(response.body);
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        _token = data['token'] as String?;
+        _user = {
+          'id': data['id'],
+          'email': data['email'],
+          'name': data['name'],
+          'authChannel': data['authChannel'],
+        };
         _isLoading = false;
         notifyListeners();
         return true;
@@ -75,7 +89,14 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        _user = jsonDecode(response.body);
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        _token = data['token'] as String?;
+        _user = {
+          'id': data['id'],
+          'email': data['email'],
+          'name': data['name'],
+          'authChannel': data['authChannel'],
+        };
         _isLoading = false;
         notifyListeners();
         return true;
@@ -92,8 +113,38 @@ class AuthProvider with ChangeNotifier {
     return false;
   }
 
+  Future<bool> deleteMyAccount() async {
+    if (_token == null) {
+      _error = 'Unauthorized';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/users/me'),
+        headers: authJsonHeaders,
+      );
+
+      if (response.statusCode == 200) {
+        logout();
+        return true;
+      }
+
+      final data = jsonDecode(response.body);
+      _error = data['error'] ?? 'Delete failed';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Network error: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   void logout() {
     _user = null;
+    _token = null;
     notifyListeners();
   }
 }

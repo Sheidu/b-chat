@@ -49,6 +49,18 @@ If you change ARB strings, regenerate localizations:
 flutter gen-l10n
 ```
 
+
+## Authenticated API usage
+
+Backend now returns JWT on register/login and requires
+`Authorization: Bearer <token>` for:
+
+- `GET /users` (contact list scoped to current user)
+- `GET /messages/:fromId/:toId?before=<timestamp>&limit=50`
+- `DELETE /users/me`
+
+`AuthProvider` stores token in memory and attaches it to REST requests.
+
 ## Socket connection model
 
 `SocketService` is a **shared singleton** provided via `MultiProvider` in `main.dart`.
@@ -99,6 +111,7 @@ flutter run --dart-define=CHAT_OWNER_NAME="Family Server Admin"
 ## Reliability and UX notes
 
 - Chat send uses Socket.IO acknowledgement with retry queue for transient disconnects.
+- Optimistic messages are marked as failed after ~10 seconds without ACK and expose a retry action in chat UI.
 - Conversation rendering de-duplicates optimistic/server echoes and suppresses duplicate IDs.
 - Login/Register submit with Enter key exactly like pressing the action button.
 - Connection status is shown in the ChatScreen AppBar and as a banner when disconnected.

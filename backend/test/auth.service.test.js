@@ -41,6 +41,7 @@ test('register hashes password and emits usersChanged hook', () => {
     complianceRepository,
     bcryptSaltRounds: 4,
     registrationPolicy: 'strict_ru_email',
+    jwtAuthService: { issueToken: () => 'test-jwt' },
     onUserRegistered: (user) => {
       emittedUser = user;
     },
@@ -61,7 +62,9 @@ test('register hashes password and emits usersChanged hook', () => {
   assert.equal(result.body.name, 'Alice');
   assert.ok(savedHash.startsWith('$2'));
   assert.notEqual(savedHash, 'plain-secret');
-  assert.deepEqual(emittedUser, result.body);
+  assert.equal(result.body.token, 'test-jwt');
+  assert.equal(emittedUser.id, result.body.id);
+  assert.equal(emittedUser.email, result.body.email);
   assert.equal(complianceRepository.events.length, 1);
   assert.equal(complianceRepository.events[0].status, 'accepted');
 });

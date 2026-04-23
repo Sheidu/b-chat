@@ -26,7 +26,7 @@ test('messages service encrypts stored text and decrypts on read', () => {
   assert.equal(created.body.text, 'secret hello');
   assert.ok(stored[0].text.startsWith('enc:v1:'));
 
-  const listed = service.listConversation(1, 2);
+  const listed = service.listConversation(1, 2, { requesterUserId: 1 });
   assert.equal(listed.status, 200);
   assert.equal(listed.body[0].text, 'secret hello');
 });
@@ -51,7 +51,9 @@ test('messages service validates malformed and boundary payloads', () => {
   assert.equal(service.createMessage({ from: 1, to: 2, text: '' }).status, 400);
   assert.equal(service.createMessage({ from: 1, to: 2, text: 'a'.repeat(4001) }).status, 400);
   assert.equal(service.createMessage({ from: 1, to: 2, text: 'ok', clientToken: 'a'.repeat(129) }).status, 400);
-  assert.equal(service.listConversation('nan', 2).status, 400);
+  assert.equal(service.listConversation('nan', 2, { requesterUserId: 2 }).status, 400);
+  assert.equal(service.listConversation(1, 2, { requesterUserId: 3 }).status, 403);
+  assert.equal(service.listConversation(1, 2, { requesterUserId: 1, limit: '0' }).status, 400);
 });
 
 test('messages service returns existing message for duplicate client token', () => {

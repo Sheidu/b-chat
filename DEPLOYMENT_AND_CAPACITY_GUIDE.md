@@ -216,13 +216,13 @@ secure — phones can be lost, rooted, or unencrypted.
 | Area | Status |
 |---|---|
 | Socket sender identity | ✅ Verified — `data.from` checked against `socket.data.userId` on every `sendMessage` |
-| REST endpoint auth | ⚠️ No token required — `GET /users`, `GET /messages/:fromId/:toId` are open |
+| REST endpoint auth | ✅ JWT bearer token required for `GET /users`, `GET /messages/:fromId/:toId`, `DELETE /users/me` |
 | Auth rate limiting | ✅ In-process limiter on `/register` and `/login` |
 | Message encryption | ✅ AES-256-GCM at rest |
 | Password hashing | ✅ bcrypt |
 | CORS | ✅ Configurable allowlist; blocks all origins if empty |
-| User data deletion | ❌ No endpoint — required for compliance |
-| JWT / session tokens | ❌ Not implemented — planned |
+| User data deletion | ✅ `DELETE /users/me` implemented (soft/hard delete mode) |
+| JWT / session tokens | ✅ JWT implemented (`JWT_SECRET`, `JWT_EXPIRES_IN`) |
 
 ---
 

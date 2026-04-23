@@ -50,7 +50,6 @@ function registerChatSocketHandlers({ io, messagesService }) {
         }
         return;
       }
-1
       try {
         const result = messagesService.createMessage({ from, to, text, clientToken });
         if (result.status >= 400) {
@@ -61,6 +60,8 @@ function registerChatSocketHandlers({ io, messagesService }) {
         }
 
         io.to(`user_${result.body.from_id}`).to(`user_${result.body.to_id}`).emit('newMessage', result.body);
+        io.to(`user_${result.body.from_id}`).emit('usersChanged', { type: 'contactsUpdated' });
+        io.to(`user_${result.body.to_id}`).emit('usersChanged', { type: 'contactsUpdated' });
         if (typeof ack === 'function') {
           ack({ ok: true, message: result.body });
         }

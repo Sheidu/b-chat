@@ -16,6 +16,7 @@ const { createMessageCrypto } = require('./security/message-crypto');
 const { ensureEnvFile, runProductionHardeningChecks } = require('./services/runtime-hardening.service');
 const { parseCorsOrigins } = require('./services/http-config.service');
 const { createAuthRateLimitMiddleware } = require('./services/auth-rate-limit.service');
+const { buildJwtAuthService } = require('./services/jwt-auth.service');
 
 const baseDir = __dirname;
 const envPath = path.join(baseDir, '.env');
@@ -35,6 +36,9 @@ const previousMessageEncryptionKeys = process.env.MESSAGE_ENCRYPTION_PREVIOUS_KE
 const userAgreementUrl = process.env.USER_AGREEMENT_URL || '';
 const authRateLimitWindowMs = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 60_000);
 const authRateLimitMaxAttempts = Number(process.env.AUTH_RATE_LIMIT_MAX_ATTEMPTS || 12);
+const jwtSecret = process.env.JWT_SECRET || 'change-me-in-production-jwt-secret';
+const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
+const hardDeleteUsers = process.env.HARD_DELETE_USERS === '1';
 
 runProductionHardeningChecks({
   nodeEnv: process.env.NODE_ENV,
@@ -66,6 +70,8 @@ const io = new Server({
   },
 });
 
+const jwtAuthService = buildJwtAuthService({ secret: jwtSecret, expiresIn: jwtExpiresIn });
+
 const authService = buildAuthService({
   usersRepository,
   complianceRepository,
@@ -73,13 +79,14 @@ const authService = buildAuthService({
   registrationPolicy,
   defaultTermsVersion: termsVersion,
   userAgreementUrl,
+  jwtAuthService,
   onUserRegistered: (user) => {
     io.emit('usersChanged', { type: 'registered', user });
   },
 });
 
-const usersService = buildUsersService({ usersRepository });
-const messagesService = buildMessagesService({ messagesRepository, messageCrypto });
+const usersService = buildUsersService({ usersRepository, complianceRepository, hardDeleteUsers });
+const messagesService = buildMessagesService({ messagesRepository, usersRepository, complianceRepository, messageCrypto });
 const authRateLimitMiddleware = createAuthRateLimitMiddleware({
   windowMs: authRateLimitWindowMs,
   maxAttempts: authRateLimitMaxAttempts,
@@ -91,6 +98,7 @@ const app = createApp({
   messagesService,
   corsAllowlist,
   authRateLimitMiddleware,
+  authMiddleware: jwtAuthService.authMiddleware,
 });
 const server = http.createServer(app);
 io.attach(server);

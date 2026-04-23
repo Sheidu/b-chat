@@ -7,6 +7,21 @@ function parsePositiveInt(value) {
   return null;
 }
 
+function parseLimit(value) {
+  if (value == null) return 50;
+  const parsed = parsePositiveInt(value);
+  if (!parsed) return null;
+  return Math.min(parsed, 50);
+}
+
+function parseBefore(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 function normalizeMessageText(text) {
   if (typeof text !== 'string') return null;
   const trimmed = text.trim();
@@ -23,20 +38,65 @@ function normalizeClientToken(clientToken) {
   return trimmed;
 }
 
-function buildMessagesService({ messagesRepository, messageCrypto }) {
-  function listConversation(fromId, toId) {
+function buildMessagesService({ messagesRepository, usersRepository, complianceRepository, messageCrypto }) {
+  function observeDecryptFailure(row, err) {
+    console.error('[messages] decrypt failed', {
+      id: row.id,
+      fromId: row.from_id,
+      toId: row.to_id,
+      error: err && err.message ? err.message : String(err),
+    });
+
+    if (complianceRepository && typeof complianceRepository.createEvent === 'function') {
+      complianceRepository.createEvent({
+        eventType: 'decrypt_failure',
+        status: 'error',
+        userId: row.to_id,
+        reason: `message_id:${row.id}`,
+      });
+    }
+  }
+
+  function listConversation(fromId, toId, { requesterUserId, before, limit } = {}) {
     const normalizedFromId = parsePositiveInt(fromId);
     const normalizedToId = parsePositiveInt(toId);
+    const normalizedLimit = parseLimit(limit);
+    const normalizedBefore = parseBefore(before);
 
     if (!normalizedFromId || !normalizedToId) {
       return { status: 400, body: { error: 'Invalid participant ids' } };
     }
+    if (!normalizedLimit) {
+      return { status: 400, body: { error: 'Invalid limit query param' } };
+    }
+    if (before != null && normalizedBefore === null) {
+      return { status: 400, body: { error: 'Invalid before query param' } };
+    }
+    if (requesterUserId !== normalizedFromId && requesterUserId !== normalizedToId) {
+      return { status: 403, body: { error: 'Forbidden conversation access' } };
+    }
 
-    const rows = messagesRepository.listMessagesBetweenUsers(normalizedFromId, normalizedToId);
-    const decrypted = rows.map((row) => ({
-      ...row,
-      text: messageCrypto ? messageCrypto.decryptText(row.text) : row.text,
-    }));
+    const rows = messagesRepository.listMessagesBetweenUsers(normalizedFromId, normalizedToId, {
+      before: normalizedBefore,
+      limit: normalizedLimit,
+    });
+
+    const decrypted = rows.map((row) => {
+      if (!messageCrypto) return row;
+      try {
+        return {
+          ...row,
+          text: messageCrypto.decryptText(row.text),
+        };
+      } catch (err) {
+        observeDecryptFailure(row, err);
+        return {
+          ...row,
+          text: '[Unable to decrypt message]',
+          decrypt_failed: true,
+        };
+      }
+    });
 
     return {
       status: 200,
@@ -71,6 +131,10 @@ function buildMessagesService({ messagesRepository, messageCrypto }) {
         encryptedText,
         normalizedClientToken
       );
+
+      if (usersRepository && typeof usersRepository.addContactPair === 'function') {
+        usersRepository.addContactPair(normalizedFrom, normalizedTo);
+      }
 
       return {
         status: 201,

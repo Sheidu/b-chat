@@ -17,7 +17,8 @@ function runMigrations(db) {
       terms_version TEXT,
       terms_accepted_at DATETIME,
       terms_url TEXT,
-      terms_text_hash TEXT
+      terms_text_hash TEXT,
+      deleted_at DATETIME
     )
   `);
 
@@ -26,6 +27,7 @@ function runMigrations(db) {
   ensureColumn(db, 'users', 'terms_accepted_at', 'terms_accepted_at DATETIME');
   ensureColumn(db, 'users', 'terms_url', 'terms_url TEXT');
   ensureColumn(db, 'users', 'terms_text_hash', 'terms_text_hash TEXT');
+  ensureColumn(db, 'users', 'deleted_at', 'deleted_at DATETIME');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -59,6 +61,30 @@ function runMigrations(db) {
       user_agent TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_compliance_events_email
+    ON compliance_events(email)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_compliance_events_created_at
+    ON compliance_events(created_at)
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS contacts (
+      user_id INTEGER NOT NULL,
+      contact_user_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, contact_user_id)
+    )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_contacts_user
+    ON contacts(user_id)
   `);
 }
 

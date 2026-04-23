@@ -21,7 +21,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _users = [];
   bool _isLoading = true;
   String? _error;
-  SocketService? _socketService;
 
   @override
   void initState() {
@@ -54,8 +53,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchUsers() async {
     try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
       final response = await http.get(
         Uri.parse('${AppConfig.baseUrl}/users'),
+        headers: auth.authJsonHeaders,
       );
 
       if (response.statusCode == 200) {
@@ -83,12 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (rawId is num) return rawId.toInt();
     if (rawId is String) return int.tryParse(rawId);
     return null;
-  }
-
-  @override
-  void dispose() {
-    _socketService?.dispose();
-    super.dispose();
   }
 
   String _buildNetworkErrorMessage(AppLocalizations l10n) {
