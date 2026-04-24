@@ -1,58 +1,38 @@
-#################################
-# Backend (Node.js)
-#################################
+```
+# Dependencies
+.dart_tool/
+.packages
+.pub/
+pubspec.lock
 
-backend/node_modules/
-backend/.env
-backend/.env.*
+# Build
+build/
+**/ios/.generated/
+**/android/.generated/
 
-# SQLite
-backend/*.db
-backend/*.db-shm
-backend/*.db-wal
+# Environment
+.env
+.env.local
+*.env.*
 
 # Logs
-backend/*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+*.log
 
-# SQLite Backups
-backend/backups/*
-
-#################################
-# Flutter / Frontend
-#################################
-
-# Build outputs
-frontend/build/
-
-# Dart / Flutter
-frontend/.dart_tool/
-frontend/.packages
-frontend/.flutter-plugins
-frontend/.flutter-plugins-dependencies
-
-# IDE
-frontend/.idea/
-frontend/*.iml
-frontend/.vscode/
-
-# Platform-specific
-frontend/android/.gradle/
-frontend/android/app/build/
-
-#################################
-# System files
-#################################
-
+# OS generated files
 .DS_Store
 Thumbs.db
 
-#################################
-# Misc
-#################################
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
-*.log
+# Coverage
+coverage/
+*.coverage
+
+# Temporary files
 *.tmp
-*.cache
+*.temp
+```

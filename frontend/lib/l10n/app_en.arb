@@ -58,6 +58,15 @@
   "appVersion": "Version {version}",
   "languageEnglish": "English",
   "languageRussian": "Russian",
+  "addContactButton": "Add Contact",
+  "addContactDialogTitle": "Add contact",
+  "nicknameLabel": "Nickname (optional)",
+  "cancelButton": "Cancel",
+  "addButton": "Add",
+  "failedToAddContact": "Failed to add contact: {error}",
+  "discoverUsersTitle": "Discover users",
+  "searchHint": "Search by name, email, or phone",
+  "noUsersFound": "No users found",
   "@appName": {
     "description": "Application name displayed in app bar"
   },
@@ -112,6 +121,15 @@
       "ownerName": {
         "type": "String",
         "example": "Alex"
+      }
+    }
+  },
+  "@failedToAddContact": {
+    "description": "Error message when adding contact fails",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "Server error"
       }
     }
   }
