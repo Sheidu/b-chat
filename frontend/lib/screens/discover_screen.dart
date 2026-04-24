@@ -26,7 +26,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(() => setState(() {}));
-    _loadUsers();
+    // Use addPostFrameCallback instead of calling directly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUsers();
+    });
   }
 
   Future<void> _loadUsers() async {

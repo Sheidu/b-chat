@@ -61,6 +61,10 @@ function buildUsersService({ usersRepository, complianceRepository, hardDeleteUs
       usersRepository.updateContactNickname(ownerId, normalizedContactId, normalizedNickname);
     }
 
+    if (io) {
+      io.emit('usersChanged', { type: 'contact_added', ownerId, contactId });
+    }
+    
     return {
       status: 201,
       body: {

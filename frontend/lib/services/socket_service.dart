@@ -30,6 +30,8 @@ class SocketService with ChangeNotifier {
   final int _maxSendAttempts = 3;
   final Set<void Function(String)> _ackListeners = {};
   final Set<void Function(String)> _failureListeners = {};
+  final Set<VoidCallback> _usersChangedListeners = {};
+  bool _usersChangedListenerRegistered = false;
 
   bool get isConnected => _socket?.connected ?? false;
   SocketConnectionState get connectionState => _connectionState;
@@ -196,8 +198,15 @@ class SocketService with ChangeNotifier {
   }
 
   void listenUsersChanged(VoidCallback callback) {
-    _socket?.off('usersChanged');
-    _socket?.on('usersChanged', (_) => callback());
+    _usersChangedListeners.add(callback);
+    if (!_usersChangedListenerRegistered && _socket != null) {
+      _usersChangedListenerRegistered = true;
+      _socket!.on('usersChanged', (_) {
+        for (final cb in _usersChangedListeners.toList()) {
+          cb();
+        }
+      });
+    }
   }
 
   void listenConnectionState(void Function(SocketConnectionState state) callback) {
@@ -231,6 +240,8 @@ class SocketService with ChangeNotifier {
     _pendingQueue.clear();
     _ackListeners.clear();
     _failureListeners.clear();
+    _usersChangedListeners.clear();
+    _usersChangedListenerRegistered = false;
     _connectionState = SocketConnectionState.disconnected;
     notifyListeners();
     super.dispose();
