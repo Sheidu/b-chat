@@ -31,7 +31,9 @@ class SocketService with ChangeNotifier {
   final Set<void Function(String)> _ackListeners = {};
   final Set<void Function(String)> _failureListeners = {};
   final Set<VoidCallback> _usersChangedListeners = {};
+  final Set<void Function(Message)> _newMessageListeners = {};
   bool _usersChangedListenerRegistered = false;
+  bool _newMessageListenerRegistered = false;
 
   bool get isConnected => _socket?.connected ?? false;
   SocketConnectionState get connectionState => _connectionState;
@@ -69,6 +71,7 @@ class SocketService with ChangeNotifier {
       notifyListeners();
       _socket!.emit('join', userId);
       _flushPendingQueue();
+      _registerNewMessageListenerIfNeeded();
     });
 
     _socket!.onDisconnect((_) {
@@ -187,10 +190,22 @@ class SocketService with ChangeNotifier {
   }
 
   void listenNewMessages(void Function(Message message) callback) {
-    _socket?.on('newMessage', (data) {
+    _newMessageListeners.add(callback);
+    _registerNewMessageListenerIfNeeded();
+  }
+
+  void _registerNewMessageListenerIfNeeded() {
+    if (_newMessageListenerRegistered || _socket == null || !isConnected) {
+      return;
+    }
+    _newMessageListenerRegistered = true;
+    _socket!.on('newMessage', (data) {
       if (data is! Map) return;
       try {
-        callback(Message.fromJson(Map<String, dynamic>.from(data)));
+        final message = Message.fromJson(Map<String, dynamic>.from(data));
+        for (final cb in _newMessageListeners.toList()) {
+          cb(message);
+        }
       } on FormatException {
         return;
       }
@@ -241,7 +256,9 @@ class SocketService with ChangeNotifier {
     _ackListeners.clear();
     _failureListeners.clear();
     _usersChangedListeners.clear();
+    _newMessageListeners.clear();
     _usersChangedListenerRegistered = false;
+    _newMessageListenerRegistered = false;
     _connectionState = SocketConnectionState.disconnected;
     notifyListeners();
     super.dispose();
