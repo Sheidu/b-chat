@@ -78,6 +78,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   }
 
   Future<void> _addContact(Map<String, dynamic> user) async {
+    final l10n = AppLocalizations.of(context)!;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
     final nicknameController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
@@ -109,8 +111,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
     if (confirmed != true) return;
 
-    try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
+    try {      
       final response = await http.post(
         Uri.parse('${AppConfig.baseUrl}/users/contacts'),
         headers: auth.authJsonHeaders,
@@ -123,7 +124,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       if (response.statusCode >= 400) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.failedToAddContact(error: response.body))),
+          SnackBar(content: Text(l10n.failedToAddContact(response.body))),
         );
         return;
       }
@@ -133,7 +134,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     } catch (err) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.failedToAddContact(error: err.toString()))),
+        SnackBar(content: Text(l10n.failedToAddContact(err.toString()))),
       );
     }
   }

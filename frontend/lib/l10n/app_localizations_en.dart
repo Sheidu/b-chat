@@ -196,4 +196,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageRussian => 'Russian';
+
+  @override
+  String get addContactButton => 'Add Contact';
+
+  @override
+  String get addContactDialogTitle => 'Add contact';
+
+  @override
+  String get nicknameLabel => 'Nickname (optional)';
+
+  @override
+  String get cancelButton => 'Cancel';
+
+  @override
+  String get addButton => 'Add';
+
+  @override
+  String failedToAddContact(String error) {
+    return 'Failed to add contact: $error';
+  }
+
+  @override
+  String get discoverUsersTitle => 'Discover users';
+
+  @override
+  String get searchHint => 'Search by name, email, or phone';
+
+  @override
+  String get noUsersFound => 'No users found';
 }

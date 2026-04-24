@@ -1,4 +1,4 @@
-import 'app_localizations.dart';
+import '../l10n/app_localizations.dart';
 
 /// Formats an error string for display using localized messages.
 /// 
