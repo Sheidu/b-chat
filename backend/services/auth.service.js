@@ -18,6 +18,14 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
 }
 
+function normalizePhoneNumber(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\+?[0-9][0-9\-\s()]{5,24}$/.test(trimmed)) return null;
+  return trimmed;
+}
+
 function resolveRegistrationPolicy(policy) {
   if (policy === 'open_email' || policy === 'strict_ru_email') {
     return policy;
@@ -75,6 +83,7 @@ function buildAuthService({
   function register({
     email,
     password,
+    phoneNumber,
     name,
     termsAccepted,
     consentText,
@@ -86,6 +95,12 @@ function buildAuthService({
     if (!normalizedEmail || !password) {
       return { status: 400, body: { error: 'Email and password required' } };
     }
+
+    const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+    if (!normalizedPhoneNumber) {
+      return { status: 400, body: { error: 'Valid phone number is required' } };
+    }
+
     if (!isValidEmail(normalizedEmail)) {
       return { status: 400, body: { error: 'Invalid email format' } };
     }
@@ -102,6 +117,7 @@ function buildAuthService({
       });
       return { status: 400, body: { error: 'User agreement acceptance is required' } };
     }
+
     const normalizedConsentText = typeof consentText === 'string' ? consentText.trim() : '';
     if (!normalizedConsentText) {
       return { status: 400, body: { error: 'Consent text is required' } };
@@ -136,6 +152,7 @@ function buildAuthService({
 
     const info = usersRepository.createUser(
       normalizedEmail,
+      normalizedPhoneNumber,
       passwordHash,
       resolvedName,
       authChannel,
@@ -144,19 +161,17 @@ function buildAuthService({
       resolvedUserAgreementUrl,
       termsEvidenceHash
     );
+
     const user = {
       id: info.lastInsertRowid,
       email: normalizedEmail,
+      phoneNumber: normalizedPhoneNumber,
       name: resolvedName,
       authChannel,
       termsVersion,
       termsAcceptedAt: acceptedAt,
       termsUrl: resolvedUserAgreementUrl || null,
     };
-
-    if (typeof usersRepository.seedContactsForUser === 'function') {
-      usersRepository.seedContactsForUser(user.id);
-    }
 
     logComplianceEvent({
       eventType: 'register',
@@ -251,6 +266,7 @@ function buildAuthService({
       body: withToken({
         id: user.id,
         email: user.email,
+        phoneNumber: user.phone_number || null,
         name: user.name,
         authChannel: user.auth_channel || 'email',
       }),

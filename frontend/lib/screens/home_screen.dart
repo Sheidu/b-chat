@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/socket_service.dart';
 import 'chat_screen.dart';
+import 'discover_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -178,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           final user = _users[index];
                           if (user['id'] == currentUserId) return const SizedBox.shrink();
 
-                          final displayName = user['name'] ?? user['email'] ?? '';
+                          final displayName = user['nickname'] ?? user['name'] ?? user['email'] ?? '';
                           final initial = displayName.isNotEmpty
                               ? displayName[0].toUpperCase()
                               : '?';
@@ -208,6 +209,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                       ),
                     ),
+
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final added = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const DiscoverScreen()),
+          );
+          if (added == true) {
+            _fetchUsers();
+          }
+        },
+        icon: const Icon(Icons.person_add),
+        label: const Text('Add Contact'),
+      ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         color: Theme.of(context).canvasColor,

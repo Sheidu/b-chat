@@ -1,32 +1,52 @@
 function buildUsersRepository(db) {
   const findUserIdByEmailStmt = db.prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL');
   const createUserStmt = db.prepare(
-    'INSERT INTO users (email, password, name, auth_channel, terms_version, terms_accepted_at, terms_url, terms_text_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO users (email, phone_number, password, name, auth_channel, terms_version, terms_accepted_at, terms_url, terms_text_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
   const findUserByIdStmt = db.prepare('SELECT * FROM users WHERE id = ?');
   const upgradePasswordStmt = db.prepare('UPDATE users SET password = ? WHERE id = ?');
-  const listUsersStmt = db.prepare('SELECT id, email, name FROM users WHERE deleted_at IS NULL');
+
   const listContactsForUserStmt = db.prepare(`
-    SELECT u.id, u.email, u.name
+    SELECT u.id, u.email, u.phone_number, u.name, c.nickname, c.created_at
     FROM contacts c
-    JOIN users u ON u.id = c.contact_user_id
-    WHERE c.user_id = ?
+    JOIN users u ON u.id = c.contact_id
+    WHERE c.owner_id = ?
       AND u.deleted_at IS NULL
+    ORDER BY LOWER(COALESCE(c.nickname, u.name, u.email)) ASC
+  `);
+
+  const listDiscoverUsersStmt = db.prepare(`
+    SELECT u.id, u.email, u.phone_number, u.name
+    FROM users u
+    WHERE u.deleted_at IS NULL
+      AND u.id <> ?
+      AND NOT EXISTS (
+        SELECT 1 FROM contacts c
+        WHERE c.owner_id = ?
+          AND c.contact_id = u.id
+      )
     ORDER BY LOWER(COALESCE(u.name, u.email)) ASC
   `);
-  const upsertContactStmt = db.prepare(
-    'INSERT OR IGNORE INTO contacts (user_id, contact_user_id) VALUES (?, ?)'
+
+  const addContactStmt = db.prepare(
+    'INSERT OR IGNORE INTO contacts (owner_id, contact_id, nickname) VALUES (?, ?, ?)'
   );
+
+  const updateContactNicknameStmt = db.prepare(
+    'UPDATE contacts SET nickname = ? WHERE owner_id = ? AND contact_id = ?'
+  );
+
   const softDeleteUserStmt = db.prepare('UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?');
   const hardDeleteUserStmt = db.prepare('DELETE FROM users WHERE id = ?');
   const deleteMessagesByUserStmt = db.prepare('DELETE FROM messages WHERE from_id = ? OR to_id = ?');
-  const deleteContactsByUserStmt = db.prepare('DELETE FROM contacts WHERE user_id = ? OR contact_user_id = ?');
-  const listActiveUserIdsStmt = db.prepare('SELECT id FROM users WHERE id <> ? AND deleted_at IS NULL');
+  const deleteOwnedContactsStmt = db.prepare('DELETE FROM contacts WHERE owner_id = ?');
+  const deleteReferencedContactsStmt = db.prepare('DELETE FROM contacts WHERE contact_id = ?');
 
   const deleteUserDataTxn = db.transaction((userId, hardDelete) => {
     deleteMessagesByUserStmt.run(userId, userId);
-    deleteContactsByUserStmt.run(userId, userId);
+    deleteOwnedContactsStmt.run(userId);
+    deleteReferencedContactsStmt.run(userId);
     if (hardDelete) {
       hardDeleteUserStmt.run(userId);
       return;
@@ -40,6 +60,7 @@ function buildUsersRepository(db) {
     },
     createUser(
       email,
+      phoneNumber,
       passwordHash,
       name,
       authChannel,
@@ -50,6 +71,7 @@ function buildUsersRepository(db) {
     ) {
       return createUserStmt.run(
         email,
+        phoneNumber,
         passwordHash,
         name,
         authChannel,
@@ -68,23 +90,17 @@ function buildUsersRepository(db) {
     upgradePasswordHash(userId, passwordHash) {
       return upgradePasswordStmt.run(passwordHash, userId);
     },
-    listUsers() {
-      return listUsersStmt.all();
-    },
     listContactsForUser(userId) {
       return listContactsForUserStmt.all(userId);
     },
-    addContactPair(userId, contactUserId) {
-      if (userId === contactUserId) return;
-      upsertContactStmt.run(userId, contactUserId);
-      upsertContactStmt.run(contactUserId, userId);
+    listDiscoverUsers(userId) {
+      return listDiscoverUsersStmt.all(userId, userId);
     },
-    seedContactsForUser(userId) {
-      const userRows = listActiveUserIdsStmt.all(userId);
-      for (const row of userRows) {
-        upsertContactStmt.run(userId, row.id);
-        upsertContactStmt.run(row.id, userId);
-      }
+    addContact(ownerId, contactId, nickname = null) {
+      return addContactStmt.run(ownerId, contactId, nickname);
+    },
+    updateContactNickname(ownerId, contactId, nickname = null) {
+      return updateContactNicknameStmt.run(nickname, ownerId, contactId);
     },
     deleteUserData(userId, { hardDelete = false } = {}) {
       deleteUserDataTxn(userId, hardDelete);

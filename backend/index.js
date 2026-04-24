@@ -86,7 +86,7 @@ const authService = buildAuthService({
 });
 
 const usersService = buildUsersService({ usersRepository, complianceRepository, hardDeleteUsers });
-const messagesService = buildMessagesService({ messagesRepository, usersRepository, complianceRepository, messageCrypto });
+const messagesService = buildMessagesService({ messagesRepository, complianceRepository, messageCrypto });
 const authRateLimitMiddleware = createAuthRateLimitMiddleware({
   windowMs: authRateLimitWindowMs,
   maxAttempts: authRateLimitMaxAttempts,

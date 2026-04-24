@@ -17,6 +17,44 @@ test('users service returns authenticated contact list', () => {
   assert.equal(result.body.length, 1);
 });
 
+test('users service discovers users excluding contacts', () => {
+  const service = buildUsersService({
+    usersRepository: {
+      listDiscoverUsers(userId) {
+        assert.equal(userId, 9);
+        return [{ id: 2, email: 'b@example.ru', name: 'Bob' }];
+      },
+    },
+  });
+
+  const result = service.discoverUsers(9);
+  assert.equal(result.status, 200);
+  assert.equal(result.body[0].id, 2);
+});
+
+test('users service adds contact with nickname', () => {
+  const calls = [];
+  const service = buildUsersService({
+    usersRepository: {
+      findUserById(userId) {
+        if (userId === 2) return { id: 2, email: 'b@example.ru' };
+        return null;
+      },
+      addContact(ownerId, contactId, nickname) {
+        calls.push({ ownerId, contactId, nickname });
+        return { changes: 1 };
+      },
+      updateContactNickname() {
+        throw new Error('should not update nickname when insert succeeds');
+      },
+    },
+  });
+
+  const result = service.addContact({ ownerId: 1, contactId: 2, nickname: 'Bobby' });
+  assert.equal(result.status, 201);
+  assert.deepEqual(calls[0], { ownerId: 1, contactId: 2, nickname: 'Bobby' });
+});
+
 test('users service deletes current user and logs compliance event', () => {
   const events = [];
   const service = buildUsersService({

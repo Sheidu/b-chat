@@ -15,6 +15,8 @@ In production, backend startup fails when this allowlist is empty.
 Protected HTTP routes now require JWT bearer auth:
 
 - `GET /users`
+- `GET /users/discover`
+- `POST /users/contacts`
 - `GET /messages/:fromId/:toId`
 - `DELETE /users/me`
 
@@ -24,6 +26,7 @@ JWT settings:
 - `JWT_EXPIRES_IN` (default `7d`, supports `s/m/h/d` suffix, e.g. `12h`)
 
 `POST /register` and `POST /login` return `token` in the response body.
+Registration additionally requires `phoneNumber`.
 
 ## User deletion endpoint (implemented)
 

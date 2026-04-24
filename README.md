@@ -113,7 +113,9 @@ REST endpoints now require `Authorization: Bearer <token>` and verify JWT claims
 After `POST /register` or `POST /login`, backend returns a signed JWT in `token`.
 Use this token for protected routes:
 
-- `GET /users` — returns current user's contact list
+- `GET /users` — returns current user's private contacts list
+- `GET /users/discover` — returns all users not yet in contacts
+- `POST /users/contacts` — add a user to current user contacts (optional nickname)
 - `GET /messages/:fromId/:toId?before=<ISO8601>&limit=50` — paginated history (max limit 50)
 - `DELETE /users/me` — deletes current user data (soft delete by default, hard delete when `HARD_DELETE_USERS=1`)
 
@@ -125,7 +127,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/users
 ```
 
 - Open two app instances/users and register both.
-- Confirm user list loads (now per-user contacts from `contacts` table).
+- Confirm user list loads from private contacts table, then use **Add Contact** to discover and add users.
 - Keep one user logged in, register another user from a second instance, and verify contacts
   refresh automatically (server emits `usersChanged`, frontend re-fetches `/users`).
 - Send a message and confirm both sender + receiver see realtime updates.
@@ -151,6 +153,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs:
 
 - SQLite database file is always `backend/family-chat.db`.
 - Passwords are hashed with `bcrypt` on registration (`BCRYPT_SALT_ROUNDS`, default `12`).
+- Registration now requires both email and phone number.
 - Login supports migration of historical plaintext passwords to bcrypt after a successful login.
 - `client_token` uses `ALTER TABLE ... ADD COLUMN` migration logic and **does not clear existing rows**.
 - `new Database(dbPath, ...)` does **not** wipe an existing file, but will create a new DB file

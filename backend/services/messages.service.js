@@ -38,7 +38,7 @@ function normalizeClientToken(clientToken) {
   return trimmed;
 }
 
-function buildMessagesService({ messagesRepository, usersRepository, complianceRepository, messageCrypto }) {
+function buildMessagesService({ messagesRepository, complianceRepository, messageCrypto }) {
   function observeDecryptFailure(row, err) {
     console.error('[messages] decrypt failed', {
       id: row.id,
@@ -132,9 +132,6 @@ function buildMessagesService({ messagesRepository, usersRepository, complianceR
         normalizedClientToken
       );
 
-      if (usersRepository && typeof usersRepository.addContactPair === 'function') {
-        usersRepository.addContactPair(normalizedFrom, normalizedTo);
-      }
 
       return {
         status: 201,

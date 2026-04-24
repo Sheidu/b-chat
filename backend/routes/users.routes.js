@@ -19,6 +19,29 @@ function createUsersRoutes({ usersService, authMiddleware }) {
     }
   });
 
+  router.get('/users/discover', authMiddleware, (req, res) => {
+    try {
+      const result = usersService.discoverUsers(req.auth.userId);
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post('/users/contacts', authMiddleware, (req, res) => {
+    try {
+      const payload = req.body || {};
+      const result = usersService.addContact({
+        ownerId: req.auth.userId,
+        contactId: payload.contactId,
+        nickname: payload.nickname,
+      });
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   router.delete('/users/me', authMiddleware, (req, res) => {
     try {
       const result = usersService.deleteCurrentUser({

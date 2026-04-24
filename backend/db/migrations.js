@@ -11,6 +11,7 @@ function runMigrations(db) {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
+      phone_number TEXT,
       password TEXT NOT NULL,
       name TEXT,
       auth_channel TEXT NOT NULL DEFAULT 'email',
@@ -28,6 +29,7 @@ function runMigrations(db) {
   ensureColumn(db, 'users', 'terms_url', 'terms_url TEXT');
   ensureColumn(db, 'users', 'terms_text_hash', 'terms_text_hash TEXT');
   ensureColumn(db, 'users', 'deleted_at', 'deleted_at DATETIME');
+  ensureColumn(db, 'users', 'phone_number', 'phone_number TEXT');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -75,16 +77,24 @@ function runMigrations(db) {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS contacts (
-      user_id INTEGER NOT NULL,
-      contact_user_id INTEGER NOT NULL,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id INTEGER NOT NULL,
+      contact_id INTEGER NOT NULL,
+      nickname TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (user_id, contact_user_id)
+      UNIQUE(owner_id, contact_id),
+      CHECK(owner_id != contact_id)
     )
   `);
 
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_contacts_user
-    ON contacts(user_id)
+    CREATE INDEX IF NOT EXISTS idx_contacts_owner
+    ON contacts(owner_id)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_contacts_contact
+    ON contacts(contact_id)
   `);
 }
 

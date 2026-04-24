@@ -24,6 +24,7 @@ class AuthProvider with ChangeNotifier {
 
   Future<bool> register(
     String email,
+    String phoneNumber,
     String password,
     String name, {
     required bool termsAccepted,
@@ -40,6 +41,7 @@ class AuthProvider with ChangeNotifier {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
+          'phoneNumber': phoneNumber,
           'password': password,
           'name': name.isEmpty ? null : name,
           'termsAccepted': termsAccepted,
@@ -54,6 +56,7 @@ class AuthProvider with ChangeNotifier {
         _user = {
           'id': data['id'],
           'email': data['email'],
+          'phoneNumber': data['phoneNumber'],
           'name': data['name'],
           'authChannel': data['authChannel'],
         };
@@ -94,6 +97,7 @@ class AuthProvider with ChangeNotifier {
         _user = {
           'id': data['id'],
           'email': data['email'],
+          'phoneNumber': data['phoneNumber'],
           'name': data['name'],
           'authChannel': data['authChannel'],
         };

@@ -61,6 +61,12 @@ Backend now returns JWT on register/login and requires
 
 `AuthProvider` stores token in memory and attaches it to REST requests.
 
+Home screen now has **Add Contact** FAB:
+- Opens Discover screen
+- Loads `/users/discover`
+- Client-side search by name/email/phone
+- Adds contact via `POST /users/contacts` with optional nickname
+
 ## Socket connection model
 
 `SocketService` is a **shared singleton** provided via `MultiProvider` in `main.dart`.
@@ -86,7 +92,7 @@ On successful connection and messaging you should see logs similar to:
 
 ## User Agreement
 
-During registration, users must accept the User Agreement.
+During registration, users must accept the User Agreement and provide a phone number.
 
 Current default URL shown in UI:
 ```

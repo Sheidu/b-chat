@@ -17,6 +17,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
   bool _obscurePassword = true;
   bool _termsAccepted = false;
@@ -56,6 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final success = await auth.register(
       _emailController.text.trim(),
+      _phoneController.text.trim(),
       _passwordController.text,
       _nameController.text.trim(),
       termsAccepted: _termsAccepted,
@@ -149,6 +151,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return null;
                     },
                   ),
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: InputDecoration(
+                      labelText: 'Phone number',
+                      prefixIcon: const Icon(Icons.phone_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    onFieldSubmitted: (_) => _submit(auth, l10n),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) return 'Phone number is required';
+                      return null;
+                    },
+                  ),
+
                   const SizedBox(height: 16),
 
                   // Password field
@@ -265,6 +285,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _phoneController.dispose();
     _nameController.dispose();
     super.dispose();
   }
