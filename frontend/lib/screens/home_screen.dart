@@ -8,6 +8,7 @@ import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/socket_service.dart';
+import '../utils/error_formatter.dart';
 import 'chat_screen.dart';
 import 'discover_screen.dart';
 
@@ -87,15 +88,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
-  String _buildNetworkErrorMessage(AppLocalizations l10n) {
-    if (_error == null) return l10n.loadUsersError;
-    if (_error!.startsWith('networkError:')) {
-      final errorDetails = _error!.substring('networkError:'.length);
-      return l10n.networkError(errorDetails);
-    }
-    return l10n.loadUsersError;
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -142,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Icon(Icons.error_outline, size: 48, color: Colors.orange[300]),
                       const SizedBox(height: 16),
                       Text(
-                        _buildNetworkErrorMessage(l10n),
+                        formatErrorMessage(_error, l10n, l10n.loadUsersError),
                         style: const TextStyle(color: Colors.red),
                         textAlign: TextAlign.center,
                       ),
@@ -221,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         },
         icon: const Icon(Icons.person_add),
-        label: const Text('Add Contact'),
+        label: Text(l10n.addContactButton),
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),

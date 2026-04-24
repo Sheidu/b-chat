@@ -5,7 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../config/app_config.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_formatter.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -42,7 +44,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
       if (response.statusCode != 200) {
         setState(() {
-          _error = 'Failed to load users';
+          _error = 'loadUsersError';
           _isLoading = false;
         });
         return;
@@ -54,7 +56,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       });
     } catch (err) {
       setState(() {
-        _error = 'Network error: $err';
+        _error = 'networkError:$err';
         _isLoading = false;
       });
     }
@@ -80,8 +82,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
+        final l10n = AppLocalizations.of(context)!;
         return AlertDialog(
-          title: const Text('Add contact'),
+          title: Text(l10n.addContactDialogTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,15 +93,15 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: nicknameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nickname (optional)',
+                decoration: InputDecoration(
+                  labelText: l10n.nicknameLabel,
                 ),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.cancelButton)),
+            ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.addButton)),
           ],
         );
       },
@@ -120,7 +123,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       if (response.statusCode >= 400) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add contact: ${response.body}')),
+          SnackBar(content: Text(l10n.failedToAddContact(error: response.body))),
         );
         return;
       }
@@ -130,7 +133,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     } catch (err) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Network error: $err')),
+        SnackBar(content: Text(l10n.failedToAddContact(error: err.toString()))),
       );
     }
   }
@@ -143,17 +146,18 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('Discover users')),
+      appBar: AppBar(title: Text(l10n.discoverUsersTitle)),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search by name, email, or phone',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: l10n.searchHint,
+                prefixIcon: const Icon(Icons.search),
               ),
             ),
           ),
@@ -161,9 +165,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Center(child: Text(_error!))
+                    ? Center(child: Text(formatErrorMessage(_error, l10n, l10n.loadUsersError)))
                     : _filteredUsers.isEmpty
-                        ? const Center(child: Text('No users found'))
+                        ? Center(child: Text(l10n.noUsersFound))
                         : ListView.builder(
                             itemCount: _filteredUsers.length,
                             itemBuilder: (context, index) {
