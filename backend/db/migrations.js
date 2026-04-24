@@ -6,6 +6,41 @@ function ensureColumn(db, tableName, columnName, ddl) {
   }
 }
 
+/**
+ * Checks whether a table exists AND has all the required columns.
+ * If the table exists but is missing columns (e.g. from a previous failed
+ * migration), it drops and recreates it.
+ *
+ * Safe to use only on tables with no foreign-key dependants, or when
+ * called before any data has been written (i.e. new tables like `contacts`).
+ */
+function ensureTable(db, tableName, requiredColumns, createSql) {
+  const existing = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`)
+    .get(tableName);
+ 
+  if (existing) {
+    const cols = db.prepare(`PRAGMA table_info(${tableName})`).all();
+    const colNames = cols.map((c) => c.name);
+    const missingAny = requiredColumns.some((r) => !colNames.includes(r));
+ 
+    if (missingAny) {
+      // Table exists but is malformed — drop and recreate.
+      // Only safe for tables with no dependants or no real data yet.
+      console.warn(
+        `[migrations] Table "${tableName}" is missing columns ${requiredColumns.filter(
+          (r) => !colNames.includes(r)
+        )}. Dropping and recreating.`
+      );
+      db.exec(`DROP TABLE IF EXISTS ${tableName}`);
+    } else {
+      return; // Table is fine, nothing to do.
+    }
+  }
+ 
+  db.exec(createSql);
+}
+
 function runMigrations(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -75,17 +110,22 @@ function runMigrations(db) {
     ON compliance_events(created_at)
   `);
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS contacts (
+  ensureTable(
+    db,
+    'contacts',
+    ['id', 'owner_id', 'contact_id', 'nickname', 'created_at'],
+    `
+    CREATE TABLE contacts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      owner_id INTEGER NOT NULL,
-      contact_id INTEGER NOT NULL,
+      owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      contact_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       nickname TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(owner_id, contact_id),
       CHECK(owner_id != contact_id)
     )
-  `);
+    `
+  );
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_contacts_owner
