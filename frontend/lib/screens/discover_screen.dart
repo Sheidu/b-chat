@@ -46,8 +46,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       );
 
       if (response.statusCode != 200) {
+        final serverError = _extractServerError(response);
         setState(() {
-          _error = 'loadUsersError';
+          _error = serverError ?? 'loadUsersError';
           _isLoading = false;
         });
         return;
@@ -62,6 +63,26 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         _error = 'networkError:$err';
         _isLoading = false;
       });
+    }
+  }
+
+  String? _extractServerError(http.Response response) {
+    final body = response.body.trim();
+    if (body.isEmpty) {
+      return 'HTTP ${response.statusCode}';
+    }
+
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        final error = decoded['error']?.toString().trim();
+        if (error != null && error.isNotEmpty) {
+          return error;
+        }
+      }
+      return body;
+    } catch (_) {
+      return body;
     }
   }
 
