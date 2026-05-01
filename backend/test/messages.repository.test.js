@@ -18,26 +18,19 @@ function createInMemoryDb() {
   return db;
 }
 
-test('messages repository creates and fetches conversation in timestamp order', () => {
+test('messages repository creates and fetches conversation in timestamp order with limit', () => {
   const db = createInMemoryDb();
   const repo = buildMessagesRepository(db);
 
   repo.createMessage(1, 2, 'first', 't1');
   repo.createMessage(2, 1, 'second', 't2');
-  repo.createMessage(1, 3, 'other-conversation', 't3');
+  repo.createMessage(1, 2, 'third', 't3');
 
-  const conversation = repo.listMessagesBetweenUsers(1, 2);
+  const conversation = repo.listMessagesBetweenUsers(1, 2, { limit: 2 });
 
   assert.equal(conversation.length, 2);
-  assert.equal(conversation[0].text, 'first');
-  assert.equal(conversation[1].text, 'second');
-  assert.deepEqual(
-    conversation.map((m) => [m.from_id, m.to_id]),
-    [
-      [1, 2],
-      [2, 1],
-    ]
-  );
+  assert.equal(conversation[0].text, 'second');
+  assert.equal(conversation[1].text, 'third');
 
   db.close();
 });

@@ -1,3 +1,5 @@
+enum LocalDeliveryState { pending, failed, sent }
+
 class Message {
   const Message({
     this.id,
@@ -6,6 +8,7 @@ class Message {
     required this.toId,
     required this.text,
     required this.timestamp,
+    this.localState = LocalDeliveryState.sent,
   });
 
   final int? id;
@@ -14,8 +17,29 @@ class Message {
   final int toId;
   final String text;
   final DateTime timestamp;
+  final LocalDeliveryState localState;
 
   bool isSentBy(int userId) => fromId == userId;
+
+  Message copyWith({
+    int? id,
+    String? clientToken,
+    int? fromId,
+    int? toId,
+    String? text,
+    DateTime? timestamp,
+    LocalDeliveryState? localState,
+  }) {
+    return Message(
+      id: id ?? this.id,
+      clientToken: clientToken ?? this.clientToken,
+      fromId: fromId ?? this.fromId,
+      toId: toId ?? this.toId,
+      text: text ?? this.text,
+      timestamp: timestamp ?? this.timestamp,
+      localState: localState ?? this.localState,
+    );
+  }
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
@@ -25,6 +49,7 @@ class Message {
       toId: _parseInt(json['to_id'] ?? json['to']),
       text: (json['text'] ?? '').toString(),
       timestamp: _parseDateTime(json['timestamp']),
+      localState: LocalDeliveryState.sent,
     );
   }
 
@@ -40,6 +65,7 @@ class Message {
       toId: toId,
       text: text,
       timestamp: DateTime.now().toUtc(),
+      localState: LocalDeliveryState.pending,
     );
   }
 

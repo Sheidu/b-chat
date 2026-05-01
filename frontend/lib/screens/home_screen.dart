@@ -8,7 +8,9 @@ import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/socket_service.dart';
+import '../utils/error_formatter.dart';
 import 'chat_screen.dart';
+import 'discover_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +23,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _users = [];
   bool _isLoading = true;
   String? _error;
-  SocketService? _socketService;
 
   @override
   void initState() {
@@ -54,8 +55,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchUsers() async {
     try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
       final response = await http.get(
         Uri.parse('${AppConfig.baseUrl}/users'),
+        headers: auth.authJsonHeaders,
       );
 
       if (response.statusCode == 200) {
@@ -83,21 +86,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (rawId is num) return rawId.toInt();
     if (rawId is String) return int.tryParse(rawId);
     return null;
-  }
-
-  @override
-  void dispose() {
-    _socketService?.dispose();
-    super.dispose();
-  }
-
-  String _buildNetworkErrorMessage(AppLocalizations l10n) {
-    if (_error == null) return l10n.loadUsersError;
-    if (_error!.startsWith('networkError:')) {
-      final errorDetails = _error!.substring('networkError:'.length);
-      return l10n.networkError(errorDetails);
-    }
-    return l10n.loadUsersError;
   }
 
   @override
@@ -146,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Icon(Icons.error_outline, size: 48, color: Colors.orange[300]),
                       const SizedBox(height: 16),
                       Text(
-                        _buildNetworkErrorMessage(l10n),
+                        formatErrorMessage(_error, l10n, l10n.loadUsersError),
                         style: const TextStyle(color: Colors.red),
                         textAlign: TextAlign.center,
                       ),
@@ -183,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           final user = _users[index];
                           if (user['id'] == currentUserId) return const SizedBox.shrink();
 
-                          final displayName = user['name'] ?? user['email'] ?? '';
+                          final displayName = user['nickname'] ?? user['name'] ?? user['email'] ?? '';
                           final initial = displayName.isNotEmpty
                               ? displayName[0].toUpperCase()
                               : '?';
@@ -213,6 +201,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                       ),
                     ),
+
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final added = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const DiscoverScreen()),
+          );
+          if (added == true) {
+            _fetchUsers();
+          }
+        },
+        icon: const Icon(Icons.person_add),
+        label: Text(l10n.addContactButton),
+      ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         color: Theme.of(context).canvasColor,

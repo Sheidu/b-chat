@@ -196,4 +196,33 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get languageRussian => 'Русский';
+
+  @override
+  String get addContactButton => 'Добавить контакт';
+
+  @override
+  String get addContactDialogTitle => 'Добавить контакт';
+
+  @override
+  String get nicknameLabel => 'Псевдоним (необязательно)';
+
+  @override
+  String get cancelButton => 'Отмена';
+
+  @override
+  String get addButton => 'Добавить';
+
+  @override
+  String failedToAddContact(String error) {
+    return 'Не удалось добавить контакт: $error';
+  }
+
+  @override
+  String get discoverUsersTitle => 'Поиск пользователей';
+
+  @override
+  String get searchHint => 'Поиск по имени, email или телефону';
+
+  @override
+  String get noUsersFound => 'Пользователи не найдены';
 }

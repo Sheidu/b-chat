@@ -103,13 +103,31 @@ subsequent events on that socket.
 
 This prevents any connected client from forging messages as another user.
 
-> **Note:** the REST endpoints (`GET /users`, `GET /messages/:fromId/:toId`) do not currently
-> require a token. Adding JWT authentication to the HTTP layer is the next planned hardening step.
+REST endpoints now require `Authorization: Bearer <token>` and verify JWT claims.
 
 ## 5) Quick sanity checks
 
+
+## 5a) Authenticated REST endpoints
+
+After `POST /register` or `POST /login`, backend returns a signed JWT in `token`.
+Use this token for protected routes:
+
+- `GET /users` — returns current user's private contacts list
+- `GET /users/discover` — returns all users not yet in contacts
+- `POST /users/contacts` — add a user to current user contacts (optional nickname)
+- `GET /messages/:fromId/:toId?before=<ISO8601>&limit=50` — paginated history (max limit 50)
+- `DELETE /users/me` — deletes current user data (soft delete by default, hard delete when `HARD_DELETE_USERS=1`)
+
+Example:
+
+```bash
+TOKEN=<jwt-from-login>
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/users
+```
+
 - Open two app instances/users and register both.
-- Confirm user list loads.
+- Confirm user list loads from private contacts table, then use **Add Contact** to discover and add users.
 - Keep one user logged in, register another user from a second instance, and verify contacts
   refresh automatically (server emits `usersChanged`, frontend re-fetches `/users`).
 - Send a message and confirm both sender + receiver see realtime updates.
@@ -135,6 +153,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs:
 
 - SQLite database file is always `backend/family-chat.db`.
 - Passwords are hashed with `bcrypt` on registration (`BCRYPT_SALT_ROUNDS`, default `12`).
+- Registration now requires both email and phone number.
 - Login supports migration of historical plaintext passwords to bcrypt after a successful login.
 - `client_token` uses `ALTER TABLE ... ADD COLUMN` migration logic and **does not clear existing rows**.
 - `new Database(dbPath, ...)` does **not** wipe an existing file, but will create a new DB file
@@ -206,11 +225,11 @@ See `DEPLOYMENT_AND_CAPACITY_GUIDE.md`.
 
 Current auth/storage is for private family use:
 - Socket sender identity is verified on every `sendMessage` event.
-- REST endpoints do not yet require a token — planned for next hardening iteration.
+- REST endpoints (`GET /users`, `GET /messages/:fromId/:toId`, `DELETE /users/me`) require JWT bearer token.
 - Passwords are hashed with bcrypt; historical plaintext rows are upgraded on first successful login.
 - Keep `SQL_VERBOSE=0` in production (emails and query text can appear in logs).
 
-Do **not** deploy this as-is to a public network without adding JWT auth to the REST layer.
+Do **not** deploy this as-is to a public network without rotating JWT and message encryption keys regularly.
 
 ## 9) Compliance-related configuration and User Agreement link
 

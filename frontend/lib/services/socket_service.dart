@@ -28,6 +28,10 @@ class SocketService with ChangeNotifier {
   SocketConnectionState _connectionState = SocketConnectionState.disconnected;
   final Map<String, _PendingOutgoingMessage> _pendingQueue = {};
   final int _maxSendAttempts = 3;
+  final Set<void Function(String)> _ackListeners = {};
+  final Set<void Function(String)> _failureListeners = {};
+  final Set<VoidCallback> _usersChangedListeners = {};
+  bool _usersChangedListenerRegistered = false;
 
   bool get isConnected => _socket?.connected ?? false;
   SocketConnectionState get connectionState => _connectionState;
@@ -107,6 +111,28 @@ class SocketService with ChangeNotifier {
     return true;
   }
 
+  bool hasPendingToken(String clientToken) => _pendingQueue.containsKey(clientToken);
+
+  void listenDeliveryAcks(void Function(String clientToken) callback) {
+    _ackListeners.add(callback);
+  }
+
+  void listenDeliveryFailures(void Function(String clientToken) callback) {
+    _failureListeners.add(callback);
+  }
+
+  void _notifyAck(String clientToken) {
+    for (final callback in _ackListeners.toList()) {
+      callback(clientToken);
+    }
+  }
+
+  void _notifyFailure(String clientToken) {
+    for (final callback in _failureListeners.toList()) {
+      callback(clientToken);
+    }
+  }
+
   void _flushPendingQueue() {
     for (final pending in _pendingQueue.values.toList()) {
       _dispatchPendingMessage(pending);
@@ -118,6 +144,7 @@ class SocketService with ChangeNotifier {
     if (!_pendingQueue.containsKey(pending.clientToken)) return;
     if (pending.attempts >= _maxSendAttempts) {
       _pendingQueue.remove(pending.clientToken);
+      _notifyFailure(pending.clientToken);
       return;
     }
 
@@ -132,8 +159,13 @@ class SocketService with ChangeNotifier {
         'clientToken': pending.clientToken,
       },
       ack: (dynamic rawAck) {
+        if (!_pendingQueue.containsKey(pending.clientToken)) {
+          return;
+        }
+
         if (rawAck is Map && rawAck['ok'] == true) {
           _pendingQueue.remove(pending.clientToken);
+          _notifyAck(pending.clientToken);
           return;
         }
 
@@ -166,8 +198,15 @@ class SocketService with ChangeNotifier {
   }
 
   void listenUsersChanged(VoidCallback callback) {
-    _socket?.off('usersChanged');
-    _socket?.on('usersChanged', (_) => callback());
+    _usersChangedListeners.add(callback);
+    if (!_usersChangedListenerRegistered && _socket != null) {
+      _usersChangedListenerRegistered = true;
+      _socket!.on('usersChanged', (_) {
+        for (final cb in _usersChangedListeners.toList()) {
+          cb();
+        }
+      });
+    }
   }
 
   void listenConnectionState(void Function(SocketConnectionState state) callback) {
@@ -199,6 +238,10 @@ class SocketService with ChangeNotifier {
     _socket?.dispose();
     _socket = null;
     _pendingQueue.clear();
+    _ackListeners.clear();
+    _failureListeners.clear();
+    _usersChangedListeners.clear();
+    _usersChangedListenerRegistered = false;
     _connectionState = SocketConnectionState.disconnected;
     notifyListeners();
     super.dispose();

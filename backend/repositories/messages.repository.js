@@ -1,8 +1,10 @@
 function buildMessagesRepository(db) {
   const listMessagesBetweenUsersStmt = db.prepare(`
     SELECT * FROM messages
-    WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)
-    ORDER BY timestamp ASC
+    WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))
+      AND (? IS NULL OR timestamp < ?)
+    ORDER BY timestamp DESC, id DESC
+    LIMIT ?
   `);
 
   const createMessageStmt = db.prepare(
@@ -12,8 +14,8 @@ function buildMessagesRepository(db) {
   const findByClientTokenStmt = db.prepare('SELECT * FROM messages WHERE client_token = ? LIMIT 1');
 
   return {
-    listMessagesBetweenUsers(fromId, toId) {
-      return listMessagesBetweenUsersStmt.all(fromId, toId, toId, fromId);
+    listMessagesBetweenUsers(fromId, toId, { before = null, limit = 50 } = {}) {
+      return listMessagesBetweenUsersStmt.all(fromId, toId, toId, fromId, before, before, limit).reverse();
     },
     createMessage(fromId, toId, text, clientToken) {
       return createMessageStmt.run(fromId, toId, text, clientToken);

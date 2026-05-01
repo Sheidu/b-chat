@@ -11,8 +11,16 @@ function createApp({
   messagesService,
   corsAllowlist,
   authRateLimitMiddleware,
+  authMiddleware,
 }) {
   const app = express();
+  const resolvedAuthMiddleware =
+    typeof authMiddleware === 'function'
+      ? authMiddleware
+      : (req, _res, next) => {
+          req.auth = req.auth || { userId: null };
+          next();
+        };
 
   app.use(cors(createCorsOptions({ corsAllowlist })));
   app.use(express.json({ limit: '32kb' }));
@@ -21,8 +29,8 @@ function createApp({
   }
 
   app.use(createAuthRoutes({ authService }));
-  app.use(createUsersRoutes({ usersService }));
-  app.use(createMessagesRoutes({ messagesService }));
+  app.use(createUsersRoutes({ usersService, authMiddleware: resolvedAuthMiddleware }));
+  app.use(createMessagesRoutes({ messagesService, authMiddleware: resolvedAuthMiddleware }));
 
   return app;
 }

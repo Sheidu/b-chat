@@ -21,6 +21,7 @@ class FakeAuthProvider extends AuthProvider {
   @override
   Future<bool> register(
     String email,
+    String phoneNumber,
     String password,
     String name, {
     required bool termsAccepted,
@@ -69,9 +70,12 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).at(0), 'Name');
     await tester.enterText(find.byType(TextFormField).at(1), 'user@example.ru');
-    await tester.enterText(find.byType(TextFormField).at(2), 'pass1234');
-    await tester.tap(find.byType(CheckboxListTile));
-    await tester.pump();
+    await tester.enterText(find.byType(TextFormField).at(2), '+15551234567');
+    await tester.enterText(find.byType(TextFormField).at(3), 'pass1234');
+    final checkboxFinder = find.byType(CheckboxListTile);
+    await tester.ensureVisible(checkboxFinder);
+    await tester.tap(checkboxFinder, warnIfMissed: false);
+    await tester.pumpAndSettle();
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 

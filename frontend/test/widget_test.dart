@@ -117,13 +117,9 @@ void main() {
     // Header text
     expect(find.text('Join the Family'), findsOneWidget);
     
-    // Form fields (name, email, password)
-    expect(find.byType(TextFormField), findsNWidgets(3));
+    // Form fields (name, email, phone, password)
+    expect(find.byType(TextFormField), findsNWidgets(4));
     
-    // ✅ NEW - find the widget by type (most robust)
-    expect(find.byType(CheckboxListTile), findsOneWidget);
-    
-    // Option B: Find the CheckboxListTile widget itself (more robust)
     expect(find.byType(CheckboxListTile), findsOneWidget);
     
     // Verify checkbox is present and unchecked by default

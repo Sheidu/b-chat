@@ -23,6 +23,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final ConversationMessageStore _messageStore = ConversationMessageStore();
+  final Map<String, DateTime> _pendingExpiryByToken = {};
   bool _loadingHistory = true;
   late SocketService _socketService;
   int? _currentUserId;
@@ -33,12 +34,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
 
-    // ✅ Add listener to rebuild UI when text changes (for send button color)
     _messageController.addListener(() {
       if (mounted) {
-        setState(() {
-          // Empty setState to trigger rebuild for button color update
-        });
+        setState(() {});
       }
     });
 
@@ -51,12 +49,25 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     _socketService = Provider.of<SocketService>(context, listen: false);
-    // Connect if not already connected (idempotent).
     if (!_socketService.isConnected) {
       _socketService.connect(_currentUserId!);
     }
-    
-    // ✅ Connection state is now read via Consumer<SocketService> in build()    
+
+    _socketService.listenDeliveryAcks((clientToken) {
+      if (!mounted) return;
+      setState(() {
+        _pendingExpiryByToken.remove(clientToken);
+      });
+    });
+
+    _socketService.listenDeliveryFailures((clientToken) {
+      if (!mounted) return;
+      setState(() {
+        _pendingExpiryByToken.remove(clientToken);
+        _messageStore.markFailedByClientToken(clientToken);
+      });
+    });
+
     _socketService.listenNewMessages((message) {
       if (!mounted) return;
 
@@ -65,6 +76,9 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       setState(() {
+        if (message.clientToken != null) {
+          _pendingExpiryByToken.remove(message.clientToken);
+        }
         _messageStore.addOrReplace(message);
       });
     });
@@ -76,10 +90,11 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_currentUserId == null) return;
 
     try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
       final uri = Uri.parse(
-        '${SocketService.baseUrl}/messages/$_currentUserId/$_otherUserId',
+        '${SocketService.baseUrl}/messages/$_currentUserId/$_otherUserId?limit=50',
       );
-      final response = await http.get(uri);
+      final response = await http.get(uri, headers: auth.authJsonHeaders);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -102,10 +117,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _sendMessage() {
-    final text = _messageController.text.trim();
+  void _sendMessage({String? overrideText}) {
+    final text = (overrideText ?? _messageController.text).trim();
     if (text.isEmpty || _currentUserId == null) return;
-    
+
     final clientToken = _nextClientToken();
 
     final sent = _socketService.sendMessage(
@@ -124,7 +139,6 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    // Optimistic UI update (queued during transient disconnect)
     setState(() {
       _messageStore.addOrReplace(
         Message.optimistic(
@@ -134,9 +148,39 @@ class _ChatScreenState extends State<ChatScreen> {
           clientToken: clientToken,
         ),
       );
+      _pendingExpiryByToken[clientToken] = DateTime.now().toUtc().add(const Duration(seconds: 10));
     });
 
+    _startFailureDeadline(clientToken);
     _messageController.clear();
+  }
+
+  void _startFailureDeadline(String clientToken) {
+    Future<void>.delayed(const Duration(seconds: 10), () {
+      if (!mounted) return;
+      final expiry = _pendingExpiryByToken[clientToken];
+      if (expiry == null) return;
+      if (DateTime.now().toUtc().isBefore(expiry)) return;
+      if (!_socketService.hasPendingToken(clientToken)) {
+        _pendingExpiryByToken.remove(clientToken);
+        return;
+      }
+
+      setState(() {
+        _pendingExpiryByToken.remove(clientToken);
+        _messageStore.markFailedByClientToken(clientToken);
+      });
+    });
+  }
+
+  void _retryMessage(Message failedMessage) {
+    final token = failedMessage.clientToken;
+    if (token != null) {
+      setState(() {
+        _messageStore.removeByClientToken(token);
+      });
+    }
+    _sendMessage(overrideText: failedMessage.text);
   }
 
   void _mergeFetchedHistory(List<Message> fetchedHistory) {
@@ -181,13 +225,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    // Do NOT dispose _socketService here — it is owned by the Provider
-    // and shared with HomeScreen. Only clean up what this screen owns.
     _messageController.dispose();
     super.dispose();
   }
 
-  // ✅ Helper for status color - with default return for null-safety
   Color _getStatusColor(SocketConnectionState state) {
     switch (state) {
       case SocketConnectionState.connected:
@@ -210,7 +251,6 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Text(l10n.chatTitle(otherUserName)),
         actions: [
-          // ✅ Connection status indicator - uses Consumer for real-time sync
           Consumer<SocketService>(
             builder: (context, socketService, _) {
               return Text(
@@ -227,7 +267,6 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          // ✅ Connection banner - ALSO uses Consumer for sync with AppBar
           Consumer<SocketService>(
             builder: (context, socketService, _) {
               if (socketService.connectionState == SocketConnectionState.disconnected ||
@@ -249,22 +288,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 );
               }
-              return const SizedBox.shrink(); // Hide banner when connected
+              return const SizedBox.shrink();
             },
           ),
-          
-          if (_messageStore.suppressedDuplicates > 0)
-            Container(
-              width: double.infinity,
-              color: Colors.blueGrey[50],
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-              child: Text(
-                'Hidden duplicate messages: ${_messageStore.suppressedDuplicates}',
-                style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
-              ),
-            ),
-
-          // Loading state
           if (_loadingHistory)
             Expanded(
               child: Center(
@@ -312,19 +338,36 @@ class _ChatScreenState extends State<ChatScreen> {
                               color: isMe ? Colors.blue[100] : Colors.grey[300],
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Text(
-                              msg.text,
-                              style: TextStyle(
-                                color: isMe ? Colors.blue[900] : Colors.black87,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  msg.text,
+                                  style: TextStyle(
+                                    color: isMe ? Colors.blue[900] : Colors.black87,
+                                  ),
+                                ),
+                                if (isMe && msg.localState == LocalDeliveryState.failed)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: TextButton.icon(
+                                      onPressed: () => _retryMessage(msg),
+                                      icon: const Icon(Icons.refresh, size: 16),
+                                      label: Text(l10n.retryButton),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red[700],
+                                        visualDensity: VisualDensity.compact,
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         );
                       },
                     ),
             ),
-          
-          // Message input area
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -356,7 +399,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      // Compliance footer for RU users
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
         color: Theme.of(context).canvasColor,
