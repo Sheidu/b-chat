@@ -132,5 +132,13 @@
         "example": "Ошибка сервера"
       }
     }
-  }
+  },
+  "loginIdentifierLabel": "Email или RU-телефон",
+  "loginIdentifierRequired": "Введите email или RU-телефон",
+  "phoneRuLabel": "RU телефон (+7 или 8)",
+  "phoneRuInvalid": "Используйте RU формат: +7XXXXXXXXXX или 8XXXXXXXXXX",
+  "editProfileTitle": "Редактировать профиль",
+  "saveButton": "Сохранить",
+  "profileUpdated": "Профиль обновлён",
+  "profileUpdateFailed": "Не удалось обновить профиль"
 }

@@ -5,11 +5,12 @@ function buildComplianceRepository(db) {
       status,
       user_id,
       email,
+      phone,
       auth_channel,
       reason,
       ip_address,
       user_agent
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   return {
@@ -18,6 +19,7 @@ function buildComplianceRepository(db) {
       status,
       userId,
       email,
+      phone,
       authChannel,
       reason,
       ipAddress,
@@ -28,6 +30,7 @@ function buildComplianceRepository(db) {
         status,
         userId || null,
         email || null,
+        phone || null,
         authChannel || null,
         reason || null,
         ipAddress || null,

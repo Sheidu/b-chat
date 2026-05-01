@@ -16,6 +16,19 @@ function normalizeOptionalNickname(value) {
   return trimmed;
 }
 
+
+function normalizePhoneNumber(value) {
+  if (typeof value !== 'string') return null;
+  const digits = value.trim().replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('8')) return `+7${digits.slice(1)}`;
+  if (digits.length === 11 && digits.startsWith('7')) return `+${digits}`;
+  return null;
+}
+
+function isValidEmail(value) {
+  return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
+}
+
 function buildUsersService({ usersRepository, complianceRepository, hardDeleteUsers = false }) {
   function listUsers(authUserId) {
     if (!authUserId) {
@@ -60,17 +73,47 @@ function buildUsersService({ usersRepository, complianceRepository, hardDeleteUs
     if (normalizedNickname && info.changes === 0) {
       usersRepository.updateContactNickname(ownerId, normalizedContactId, normalizedNickname);
     }
-
-    if (io) {
-      io.emit('usersChanged', { type: 'contact_added', ownerId, contactId });
-    }
-    
     return {
       status: 201,
       body: {
         success: true,
       },
     };
+  }
+
+
+  function updateCurrentUser({ userId, email, phoneNumber, name, context = {} }) {
+    if (!userId) return { status: 401, body: { error: 'Unauthorized' } };
+    const user = usersRepository.findUserById(userId);
+    if (!user || user.deleted_at) return { status: 404, body: { error: 'User not found' } };
+
+    const nextEmail = typeof email === 'string' ? email.trim().toLowerCase() : user.email;
+    const nextName = typeof name === 'string' && name.trim() ? name.trim() : user.name;
+    const nextPhone = phoneNumber == null ? (user.phone_number || null) : normalizePhoneNumber(phoneNumber);
+
+    if (!isValidEmail(nextEmail)) return { status: 400, body: { error: 'Invalid email format' } };
+    if (!nextPhone) return { status: 400, body: { error: 'Valid RU phone number is required (+7XXXXXXXXXX or 8XXXXXXXXXX)' } };
+
+    const duplicate = usersRepository.findUserByEmailOrPhone(nextEmail, nextPhone);
+    if (duplicate && duplicate.id !== userId) return { status: 400, body: { error: 'Email or phone already taken' } };
+
+    usersRepository.updateUserProfile(userId, nextEmail, nextPhone, nextName);
+
+    if (complianceRepository && typeof complianceRepository.createEvent === 'function') {
+      complianceRepository.createEvent({
+        eventType: 'profile_update',
+        status: 'accepted',
+        userId,
+        email: nextEmail,
+        phone: nextPhone,
+        authChannel: user.auth_channel || 'email',
+        reason: 'self_service_update',
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+    }
+
+    return { status: 200, body: { success: true, user: { id: userId, email: nextEmail, phoneNumber: nextPhone, name: nextName } } };
   }
 
   function deleteCurrentUser({ userId, context = {} }) {
@@ -91,6 +134,7 @@ function buildUsersService({ usersRepository, complianceRepository, hardDeleteUs
         status: 'accepted',
         userId,
         email: user.email,
+        phone: user.phone_number || null,
         authChannel: user.auth_channel || 'email',
         reason: hardDeleteUsers ? 'hard_delete' : 'soft_delete',
         ipAddress: context.ipAddress,
@@ -111,6 +155,7 @@ function buildUsersService({ usersRepository, complianceRepository, hardDeleteUs
     listUsers,
     discoverUsers,
     addContact,
+    updateCurrentUser,
     deleteCurrentUser,
   };
 }

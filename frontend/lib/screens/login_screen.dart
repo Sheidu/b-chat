@@ -13,7 +13,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     final success = await auth.login(
-      _emailController.text.trim(),
+      _identifierController.text.trim(),
       _passwordController.text,
     );
 
@@ -76,9 +76,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   // Email field with RU compliance hint
                   TextFormField(
-                    controller: _emailController,
+                    controller: _identifierController,
                     decoration: InputDecoration(
-                      labelText: l10n.emailLabel,
+                      labelText: l10n.loginIdentifierLabel,
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       helperText: l10n.emailRuHint,
@@ -88,8 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _submit(auth, l10n),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return l10n.emailRequired;
-                      if (!value.contains('@')) return l10n.emailInvalid;
+                      if (value == null || value.isEmpty) return l10n.loginIdentifierRequired;
                       // Client-side hint only - server enforces REGISTRATION_POLICY strictly
                       return null;
                     },
@@ -204,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }

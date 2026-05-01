@@ -250,3 +250,10 @@ Remaining gap: evidence retrieval/retention operations are not formalized.
 
 ### Remaining localization risks
 1. Future string additions require ARB updates + `flutter gen-l10n` regeneration.
+
+## May 1, 2026 update
+- Added RU-only phone normalization/validation (`+7` / `8`) on backend and frontend hints.
+- Added login by email or RU phone via `identifier`.
+- Added profile update endpoint `PATCH /users/me` and settings UI flow.
+- Added async registration welcome-email queue with retry/dead-letter handling.
+- Mitigated auth enumeration by using unified login error response (`Invalid credentials`).

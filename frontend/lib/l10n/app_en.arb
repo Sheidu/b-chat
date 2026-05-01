@@ -132,5 +132,13 @@
         "example": "Server error"
       }
     }
-  }
+  },
+  "loginIdentifierLabel": "Email or RU phone",
+  "loginIdentifierRequired": "Enter email or RU phone",
+  "phoneRuLabel": "RU phone (+7 or 8)",
+  "phoneRuInvalid": "Use RU format: +7XXXXXXXXXX or 8XXXXXXXXXX",
+  "editProfileTitle": "Edit profile",
+  "saveButton": "Save",
+  "profileUpdated": "Profile updated",
+  "profileUpdateFailed": "Update failed"
 }

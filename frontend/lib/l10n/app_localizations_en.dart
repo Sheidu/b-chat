@@ -225,4 +225,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noUsersFound => 'No users found';
+
+  @override
+  String get loginIdentifierLabel => 'Email or RU phone';
+  @override
+  String get loginIdentifierRequired => 'Enter email or RU phone';
+  @override
+  String get phoneRuLabel => 'RU phone (+7 or 8)';
+  @override
+  String get phoneRuInvalid => 'Use RU format: +7XXXXXXXXXX or 8XXXXXXXXXX';
+  @override
+  String get editProfileTitle => 'Edit profile';
+  @override
+  String get saveButton => 'Save';
+  @override
+  String get profileUpdated => 'Profile updated';
+  @override
+  String get profileUpdateFailed => 'Update failed';
 }

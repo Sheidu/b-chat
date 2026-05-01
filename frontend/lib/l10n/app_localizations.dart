@@ -502,6 +502,15 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No users found'**
   String get noUsersFound;
+
+  String get loginIdentifierLabel;
+  String get loginIdentifierRequired;
+  String get phoneRuLabel;
+  String get phoneRuInvalid;
+  String get editProfileTitle;
+  String get saveButton;
+  String get profileUpdated;
+  String get profileUpdateFailed;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
