@@ -34,8 +34,10 @@ function parseExpirySeconds(expiresIn) {
 
   if (typeof expiresIn === 'string') {
     const trimmed = expiresIn.trim();
-    const direct = Number.parseInt(trimmed, 10);
-    if (Number.isInteger(direct) && direct > 0) return direct;
+    if (/^\d+$/.test(trimmed)) {
+      const direct = Number.parseInt(trimmed, 10);
+      if (Number.isInteger(direct) && direct > 0) return direct;
+    }
 
     const match = /^(\d+)([smhd])$/.exec(trimmed);
     if (!match) return 7 * 24 * 60 * 60;
