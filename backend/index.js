@@ -17,6 +17,8 @@ const { ensureEnvFile, runProductionHardeningChecks } = require('./services/runt
 const { parseCorsOrigins } = require('./services/http-config.service');
 const { createAuthRateLimitMiddleware } = require('./services/auth-rate-limit.service');
 const { buildJwtAuthService } = require('./services/jwt-auth.service');
+const { buildNotificationService } = require('./services/notification.service');
+const { buildNotificationsRepository } = require('./repositories/notifications.repository');
 
 const baseDir = __dirname;
 const envPath = path.join(baseDir, '.env');
@@ -39,6 +41,8 @@ const authRateLimitMaxAttempts = Number(process.env.AUTH_RATE_LIMIT_MAX_ATTEMPTS
 const jwtSecret = process.env.JWT_SECRET || 'change-me-in-production-jwt-secret';
 const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
 const hardDeleteUsers = process.env.HARD_DELETE_USERS === '1';
+const mailSender = process.env.MAIL_SENDER || 'noreply@family-chat.local';
+const emailQueuePollMs = Number(process.env.EMAIL_QUEUE_POLL_MS || 15000);
 
 runProductionHardeningChecks({
   nodeEnv: process.env.NODE_ENV,
@@ -57,6 +61,7 @@ runMigrations(db);
 const usersRepository = buildUsersRepository(db);
 const messagesRepository = buildMessagesRepository(db);
 const complianceRepository = buildComplianceRepository(db);
+const notificationsRepository = buildNotificationsRepository(db);
 const messageCrypto = createMessageCrypto({
   rawKey: messageEncryptionKey,
   previousKeys: previousMessageEncryptionKeys,
@@ -71,6 +76,13 @@ const io = new Server({
 });
 
 const jwtAuthService = buildJwtAuthService({ secret: jwtSecret, expiresIn: jwtExpiresIn });
+const notificationService = buildNotificationService({ notificationsRepository, senderEmail: mailSender });
+const mailTransport = {
+  send({ to, subject }) {
+    console.log(`[mail] to=${to} subject=${subject}`);
+  },
+};
+setInterval(() => notificationService.processQueue({ transport: mailTransport }), emailQueuePollMs);
 
 const authService = buildAuthService({
   usersRepository,
@@ -80,6 +92,7 @@ const authService = buildAuthService({
   defaultTermsVersion: termsVersion,
   userAgreementUrl,
   jwtAuthService,
+  notificationService,
   onUserRegistered: (user) => {
     io.emit('usersChanged', { type: 'registered', user });
   },

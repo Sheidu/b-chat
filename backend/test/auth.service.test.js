@@ -7,6 +7,8 @@ function createUsersRepoStub(overrides = {}) {
     findUserIdByEmail: () => null,
     createUser: () => ({ lastInsertRowid: 101 }),
     findUserByEmail: () => null,
+    findUserByPhone: () => null,
+    findUserByEmailOrPhone: () => null,
     upgradePasswordHash: () => ({}),
     ...overrides,
   };
@@ -50,7 +52,7 @@ test('register hashes password and emits usersChanged hook', () => {
   const result = authService.register({
     email: 'alice@example.ru',
     password: 'plain-secret',
-    phoneNumber: '+15551234567',
+    phoneNumber: '+79991234567',
     name: 'Alice',
     termsAccepted: true,
     consentText: 'consent',
@@ -84,7 +86,7 @@ test('register rejects missing terms acceptance', () => {
   const result = authService.register({
     email: 'alice@example.ru',
     password: 'plain-secret',
-    phoneNumber: '+15551234567',
+    phoneNumber: '+79991234567',
     name: 'Alice',
     termsAccepted: false,
     consentText: 'consent',
@@ -107,7 +109,7 @@ test('register rejects missing consent text', () => {
   const result = authService.register({
     email: 'alice@example.ru',
     password: 'plain-secret',
-    phoneNumber: '+15551234567',
+    phoneNumber: '+79991234567',
     termsAccepted: true,
     consentText: '',
     authChannel: 'email',
@@ -130,7 +132,7 @@ test('register rejects non-ru email domains in strict mode', () => {
   const result = authService.register({
     email: 'alice@example.com',
     password: 'plain-secret',
-    phoneNumber: '+15551234567',
+    phoneNumber: '+79991234567',
     name: 'Alice',
     termsAccepted: true,
     consentText: 'consent',
@@ -168,7 +170,7 @@ test('login upgrades legacy plaintext password rows', () => {
   });
 
   const result = authService.login({
-    email: 'legacy@example.ru',
+    identifier: 'legacy@example.ru',
     password: 'legacy-plaintext',
   });
 
@@ -198,12 +200,12 @@ test('login rejects invalid credentials', () => {
   });
 
   const result = authService.login({
-    email: 'bob@example.ru',
+    identifier: 'bob@example.ru',
     password: 'expected-password',
   });
 
   assert.equal(result.status, 401);
-  assert.deepEqual(result.body, { error: 'Invalid email or password' });
+  assert.deepEqual(result.body, { error: 'Invalid credentials' });
 });
 
 
@@ -219,7 +221,7 @@ test('register rejects malformed payloads and boundary conditions', () => {
     authService.register({
       email: null,
       password: 'x',
-      phoneNumber: '+15551234567',
+      phoneNumber: '+79991234567',
       termsAccepted: true,
       consentText: 'consent',
       authChannel: 'email',
@@ -230,7 +232,7 @@ test('register rejects malformed payloads and boundary conditions', () => {
     authService.register({
       email: 'valid@example.ru',
       password: '',
-      phoneNumber: '+15551234567',
+      phoneNumber: '+79991234567',
       termsAccepted: true,
       consentText: 'consent',
       authChannel: 'email',
@@ -241,7 +243,7 @@ test('register rejects malformed payloads and boundary conditions', () => {
     authService.register({
       email: 'valid@example.ru',
       password: 'x',
-      phoneNumber: '+15551234567',
+      phoneNumber: '+79991234567',
       termsAccepted: true,
       consentText: 'consent',
       authChannel: 'sms',
@@ -258,9 +260,9 @@ test('login rejects malformed payloads', () => {
     registrationPolicy: 'strict_ru_email',
   });
 
-  assert.equal(authService.login({ email: ' ', password: 'x' }).status, 400);
-  assert.equal(authService.login({ email: 'user@example.ru', password: null }).status, 400);
-  assert.equal(authService.login({ email: 'user@example.com', password: 'x' }).status, 400);
+  assert.equal(authService.login({ identifier: ' ', password: 'x' }).status, 401);
+  assert.equal(authService.login({ identifier: 'user@example.ru', password: null }).status, 401);
+  assert.equal(authService.login({ identifier: 'user@example.com', password: 'x' }).status, 401);
 });
 
 test('register rejects invalid email format', () => {
@@ -274,7 +276,7 @@ test('register rejects invalid email format', () => {
   const result = authService.register({
     email: 'not-an-email',
     password: 'secret',
-    phoneNumber: '+15551234567',
+    phoneNumber: '+79991234567',
     termsAccepted: true,
     consentText: 'consent',
     authChannel: 'email',
@@ -295,7 +297,7 @@ test('open_email policy allows non-ru email domains', () => {
   const result = authService.register({
     email: 'alice@example.com',
     password: 'secret',
-    phoneNumber: '+15551234567',
+    phoneNumber: '+79991234567',
     termsAccepted: true,
     consentText: 'consent',
     authChannel: 'email',
@@ -323,5 +325,5 @@ test('register requires phone number', () => {
   });
 
   assert.equal(result.status, 400);
-  assert.equal(result.body.error, 'Valid phone number is required');
+  assert.equal(result.body.error, 'Valid RU phone number is required (+7XXXXXXXXXX or 8XXXXXXXXXX)');
 });

@@ -4,6 +4,9 @@ function buildUsersRepository(db) {
     'INSERT INTO users (email, phone_number, password, name, auth_channel, terms_version, terms_accepted_at, terms_url, terms_text_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
+  const findUserByPhoneStmt = db.prepare('SELECT * FROM users WHERE phone_number = ?');
+  const findUserByEmailOrPhoneStmt = db.prepare('SELECT * FROM users WHERE email = ? OR phone_number = ?');
+  const updateUserProfileStmt = db.prepare('UPDATE users SET email = ?, phone_number = ?, name = ? WHERE id = ? AND deleted_at IS NULL');
   const findUserByIdStmt = db.prepare('SELECT * FROM users WHERE id = ?');
   const upgradePasswordStmt = db.prepare('UPDATE users SET password = ? WHERE id = ?');
 
@@ -84,8 +87,17 @@ function buildUsersRepository(db) {
     findUserByEmail(email) {
       return findUserByEmailStmt.get(email);
     },
+    findUserByPhone(phoneNumber) {
+      return findUserByPhoneStmt.get(phoneNumber);
+    },
+    findUserByEmailOrPhone(email, phoneNumber) {
+      return findUserByEmailOrPhoneStmt.get(email, phoneNumber);
+    },
     findUserById(userId) {
       return findUserByIdStmt.get(userId) || null;
+    },
+    updateUserProfile(userId, email, phoneNumber, name) {
+      return updateUserProfileStmt.run(email, phoneNumber, name, userId);
     },
     upgradePasswordHash(userId, passwordHash) {
       return upgradePasswordStmt.run(passwordHash, userId);

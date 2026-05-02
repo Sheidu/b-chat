@@ -27,6 +27,7 @@ class FakeAuthProvider extends AuthProvider {
     required bool termsAccepted,
     required String consentText,
     String authChannel = 'email',
+    String locale = 'ru',
   }) async {
     registerCalls += 1;
     return false;
@@ -70,7 +71,7 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).at(0), 'Name');
     await tester.enterText(find.byType(TextFormField).at(1), 'user@example.ru');
-    await tester.enterText(find.byType(TextFormField).at(2), '+15551234567');
+    await tester.enterText(find.byType(TextFormField).at(2), '+79991234567');
     await tester.enterText(find.byType(TextFormField).at(3), 'pass1234');
     final checkboxFinder = find.byType(CheckboxListTile);
     await tester.ensureVisible(checkboxFinder);

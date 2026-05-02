@@ -42,6 +42,23 @@ function createUsersRoutes({ usersService, authMiddleware }) {
     }
   });
 
+
+  router.patch('/users/me', authMiddleware, (req, res) => {
+    try {
+      const payload = req.body || {};
+      const result = usersService.updateCurrentUser({
+        userId: req.auth.userId,
+        email: payload.email,
+        phoneNumber: payload.phoneNumber,
+        name: payload.name,
+        context: extractRequestContext(req),
+      });
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   router.delete('/users/me', authMiddleware, (req, res) => {
     try {
       const result = usersService.deleteCurrentUser({

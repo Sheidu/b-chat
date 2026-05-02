@@ -30,6 +30,7 @@ class AuthProvider with ChangeNotifier {
     required bool termsAccepted,
     required String consentText,
     String authChannel = 'email',
+    String locale = 'ru',
   }) async {
     _isLoading = true;
     _error = null;
@@ -47,6 +48,7 @@ class AuthProvider with ChangeNotifier {
           'termsAccepted': termsAccepted,
           'consentText': consentText,
           'authChannel': authChannel,
+          'locale': locale,
         }),
       );
 
@@ -76,7 +78,7 @@ class AuthProvider with ChangeNotifier {
     return false;
   }
 
-  Future<bool> login(String email, String password) async {
+  Future<bool> login(String identifier, String password) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -86,7 +88,7 @@ class AuthProvider with ChangeNotifier {
         Uri.parse('$baseUrl/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'email': email,
+          'identifier': identifier,
           'password': password,
         }),
       );
@@ -115,6 +117,36 @@ class AuthProvider with ChangeNotifier {
     _isLoading = false;
     notifyListeners();
     return false;
+  }
+
+
+  Future<bool> updateProfile({required String email, required String phoneNumber, required String name}) async {
+    if (_token == null) {
+      _error = 'Unauthorized';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/users/me'),
+        headers: authJsonHeaders,
+        body: jsonEncode({'email': email, 'phoneNumber': phoneNumber, 'name': name}),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        _user = data['user'] as Map<String, dynamic>;
+        notifyListeners();
+        return true;
+      }
+      _error = data['error'] ?? 'Profile update failed';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Network error: $e';
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> deleteMyAccount() async {

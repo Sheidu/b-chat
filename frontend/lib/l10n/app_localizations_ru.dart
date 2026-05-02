@@ -225,4 +225,21 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get noUsersFound => 'Пользователи не найдены';
+
+  @override
+  String get loginIdentifierLabel => 'Email или RU-телефон';
+  @override
+  String get loginIdentifierRequired => 'Введите email или RU-телефон';
+  @override
+  String get phoneRuLabel => 'RU телефон (+7 или 8)';
+  @override
+  String get phoneRuInvalid => 'Используйте RU формат: +7XXXXXXXXXX или 8XXXXXXXXXX';
+  @override
+  String get editProfileTitle => 'Редактировать профиль';
+  @override
+  String get saveButton => 'Сохранить';
+  @override
+  String get profileUpdated => 'Профиль обновлён';
+  @override
+  String get profileUpdateFailed => 'Не удалось обновить профиль';
 }

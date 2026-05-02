@@ -110,13 +110,14 @@ REST endpoints now require `Authorization: Bearer <token>` and verify JWT claims
 
 ## 5a) Authenticated REST endpoints
 
-After `POST /register` or `POST /login`, backend returns a signed JWT in `token`.
+After `POST /register` or `POST /login (accepts `identifier`: email or RU phone)`, backend returns a signed JWT in `token`.
 Use this token for protected routes:
 
 - `GET /users` — returns current user's private contacts list
 - `GET /users/discover` — returns all users not yet in contacts
 - `POST /users/contacts` — add a user to current user contacts (optional nickname)
 - `GET /messages/:fromId/:toId?before=<ISO8601>&limit=50` — paginated history (max limit 50)
+- `PATCH /users/me` — update own `email`, `phoneNumber`, `name`
 - `DELETE /users/me` — deletes current user data (soft delete by default, hard delete when `HARD_DELETE_USERS=1`)
 
 Example:
@@ -153,7 +154,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs:
 
 - SQLite database file is always `backend/family-chat.db`.
 - Passwords are hashed with `bcrypt` on registration (`BCRYPT_SALT_ROUNDS`, default `12`).
-- Registration now requires both email and phone number.
+- Registration now requires both email and RU phone number (`+7XXXXXXXXXX` or `8XXXXXXXXXX`), normalized to E.164 (`+7...`).
 - Login supports migration of historical plaintext passwords to bcrypt after a successful login.
 - `client_token` uses `ALTER TABLE ... ADD COLUMN` migration logic and **does not clear existing rows**.
 - `new Database(dbPath, ...)` does **not** wipe an existing file, but will create a new DB file
@@ -264,6 +265,8 @@ flutter run --dart-define=CHAT_OWNER_NAME="Family Server Admin"
 - `TERMS_VERSION` (default: `2026-03-31`) — stored with user consent metadata.
 - `USER_AGREEMENT_URL` — stored with consent evidence for each registration.
 - `AUTH_RATE_LIMIT_WINDOW_MS` / `AUTH_RATE_LIMIT_MAX_ATTEMPTS` — control auth rate limiting.
+- `MAIL_SENDER` — from-address used by welcome-email notifications queue worker.
+- `EMAIL_QUEUE_POLL_MS` — queue polling interval in milliseconds.
 
 ### Production hardening environment variables
 
@@ -286,3 +289,9 @@ Backend stores auth/consent audit events in `compliance_events`:
 - event type (`register`/`login`)
 - status (`accepted`/`rejected`)
 - reason, IP address, User-Agent, timestamp
+
+## Email notifications
+
+Successful registration enqueues a welcome email into `outbound_emails`.
+A background worker processes queued emails with retry and dead-letter states (`queued`/`retry`/`sent`/`dead_letter`).
+

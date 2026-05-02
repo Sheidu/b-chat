@@ -63,6 +63,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       termsAccepted: _termsAccepted,
       consentText: consentText,
       authChannel: 'email',
+      locale: Localizations.localeOf(context).languageCode,
     );
 
     if (success) {
@@ -156,7 +157,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   TextFormField(
                     controller: _phoneController,
                     decoration: InputDecoration(
-                      labelText: 'Phone number',
+                      labelText: l10n.phoneRuLabel,
                       prefixIcon: const Icon(Icons.phone_outlined),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -164,7 +165,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     textInputAction: TextInputAction.next,
                     onFieldSubmitted: (_) => _submit(auth, l10n),
                     validator: (value) {
-                      if (value == null || value.trim().isEmpty) return 'Phone number is required';
+                      if (value == null || value.trim().isEmpty) return l10n.phoneRuInvalid;
+                      final digits = value.replaceAll(RegExp(r'\D'), '');
+                      if (!(digits.length == 11 && (digits.startsWith('7') || digits.startsWith('8')))) {
+                        return l10n.phoneRuInvalid;
+                      }
                       return null;
                     },
                   ),

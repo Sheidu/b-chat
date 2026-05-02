@@ -86,12 +86,31 @@ function runMigrations(db) {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS outbound_emails (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      recipient_email TEXT NOT NULL,
+      recipient_phone TEXT,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      locale TEXT NOT NULL DEFAULT 'ru',
+      status TEXT NOT NULL DEFAULT 'queued',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      next_attempt_at TEXT NOT NULL,
+      sent_at TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS compliance_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_type TEXT NOT NULL,
       status TEXT NOT NULL,
       user_id INTEGER,
       email TEXT,
+      phone TEXT,
       auth_channel TEXT,
       reason TEXT,
       ip_address TEXT,
@@ -109,6 +128,10 @@ function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_compliance_events_created_at
     ON compliance_events(created_at)
   `);
+
+
+  ensureColumn(db, 'outbound_emails', 'recipient_phone', 'recipient_phone TEXT');
+  ensureColumn(db, 'compliance_events', 'phone', 'phone TEXT');
 
   ensureTable(
     db,
@@ -135,6 +158,17 @@ function runMigrations(db) {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_contacts_contact
     ON contacts(contact_id)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_outbound_emails_status_next_attempt
+    ON outbound_emails(status, next_attempt_at)
+  `);
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique
+    ON users(phone_number)
+    WHERE deleted_at IS NULL
   `);
 }
 
