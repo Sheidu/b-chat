@@ -134,7 +134,7 @@ function buildAuthService({
 
     const info = usersRepository.createUser(normalizedEmail, normalizedPhoneNumber, passwordHash, resolvedName, authChannel, termsVersion, acceptedAt, resolvedUserAgreementUrl, termsEvidenceHash);
 
-    const user = { id: info.lastInsertRowid, email: normalizedEmail, phoneNumber: normalizedPhoneNumber, name: resolvedName, authChannel, termsVersion, termsAcceptedAt: acceptedAt, termsUrl: resolvedUserAgreementUrl || null };
+    const user = { id: info.lastInsertRowid, email: normalizedEmail, phoneNumber: normalizedPhoneNumber, name: resolvedName, authChannel, termsVersion, termsAcceptedAt: acceptedAt, termsUrl: resolvedUserAgreementUrl || null, tokenVersion: 1 };
 
     logComplianceEvent({ eventType: 'register', status: 'accepted', userId: user.id, email: user.email, phone: user.phoneNumber, authChannel, reason: `terms_hash:${termsEvidenceHash}`, ipAddress: context.ipAddress, userAgent: context.userAgent });
     if (typeof onUserRegistered === 'function') onUserRegistered(user);
@@ -186,9 +186,14 @@ function buildAuthService({
       return timingSafeLoginError();
     }
 
-    logComplianceEvent({ eventType: 'login', status: 'accepted', userId: user.id, email: user.email, phone: user.phone_number || null, authChannel: user.auth_channel || 'email', ipAddress: context.ipAddress, userAgent: context.userAgent });
+    const bumped = typeof usersRepository.incrementTokenVersion === 'function'
+      ? usersRepository.incrementTokenVersion(user.id)
+      : null;
+    const nextVersion = bumped && Number.isInteger(bumped.token_version) ? bumped.token_version : (user.token_version || 1) + 1;
 
-    return { status: 200, body: withToken({ id: user.id, email: user.email, phoneNumber: user.phone_number || null, name: user.name, authChannel: user.auth_channel || 'email' }) };
+    logComplianceEvent({ eventType: 'login', status: 'accepted', userId: user.id, email: user.email, phone: user.phone_number || null, authChannel: user.auth_channel || 'email', reason: `token_version:${nextVersion}`, ipAddress: context.ipAddress, userAgent: context.userAgent });
+
+    return { status: 200, body: withToken({ id: user.id, email: user.email, phoneNumber: user.phone_number || null, name: user.name, authChannel: user.auth_channel || 'email', tokenVersion: nextVersion }) };
   }
 
   return { register, login, normalizePhoneNumber };

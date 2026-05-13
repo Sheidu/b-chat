@@ -54,7 +54,8 @@ function runMigrations(db) {
       terms_accepted_at DATETIME,
       terms_url TEXT,
       terms_text_hash TEXT,
-      deleted_at DATETIME
+      deleted_at DATETIME,
+      token_version INTEGER NOT NULL DEFAULT 1
     )
   `);
 
@@ -65,6 +66,7 @@ function runMigrations(db) {
   ensureColumn(db, 'users', 'terms_text_hash', 'terms_text_hash TEXT');
   ensureColumn(db, 'users', 'deleted_at', 'deleted_at DATETIME');
   ensureColumn(db, 'users', 'phone_number', 'phone_number TEXT');
+  ensureColumn(db, 'users', 'token_version', 'token_version INTEGER NOT NULL DEFAULT 1');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -100,6 +102,16 @@ function runMigrations(db) {
       next_attempt_at TEXT NOT NULL,
       sent_at TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+      bucket_key TEXT PRIMARY KEY,
+      count INTEGER NOT NULL,
+      reset_at_ms INTEGER NOT NULL,
+      updated_at_ms INTEGER NOT NULL
     )
   `);
 

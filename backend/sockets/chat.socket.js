@@ -1,6 +1,26 @@
-function registerChatSocketHandlers({ io, messagesService }) {
+function registerChatSocketHandlers({ io, messagesService, jwtAuthService }) {
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+
+    const token = _extractSocketToken(socket);
+    if (!jwtAuthService || !token) {
+      socket.disconnect(true);
+      return;
+    }
+
+    let claims;
+    try {
+      claims = jwtAuthService.verifyToken(token);
+    } catch (_err) {
+      socket.disconnect(true);
+      return;
+    }
+    const tokenUserId = _parsePositiveInt(claims.sub);
+    if (!tokenUserId) {
+      socket.disconnect(true);
+      return;
+    }
+    socket.data.userId = tokenUserId;
 
     // ─── Authentication ───────────────────────────────────────────────────────
     // The client calls `join` immediately after connecting and passes its userId.
@@ -14,18 +34,10 @@ function registerChatSocketHandlers({ io, messagesService }) {
 
     socket.on('join', (userId) => {
       const parsed = _parsePositiveInt(userId);
-      if (!parsed) {
+      if (!parsed || parsed !== socket.data.userId) {
         socket.disconnect(true);
         return;
       }
-
-      // Prevent re-joining with a different identity on the same socket.
-      if (socket.data.userId !== undefined && socket.data.userId !== parsed) {
-        socket.disconnect(true);
-        return;
-      }
-
-      socket.data.userId = parsed;
       socket.join(`user_${parsed}`);
     });
 
@@ -84,6 +96,19 @@ function _parsePositiveInt(value) {
   if (typeof value === 'string') {
     const parsed = Number.parseInt(value, 10);
     if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
+function _extractSocketToken(socket) {
+  const authToken = socket.handshake?.auth?.token;
+  if (typeof authToken === 'string' && authToken.trim()) return authToken.trim();
+  const queryToken = socket.handshake?.query?.token;
+  if (typeof queryToken === 'string' && queryToken.trim()) return queryToken.trim();
+  const header = socket.handshake?.headers?.authorization;
+  if (typeof header === 'string') {
+    const lower = header.toLowerCase();
+    if (lower.startsWith('bearer ')) return header.slice(7).trim();
   }
   return null;
 }

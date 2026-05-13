@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
+import '../utils/error_formatter.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -38,7 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? l10n.profileUpdated : (auth.error ?? l10n.profileUpdateFailed))),
+      SnackBar(content: Text(ok ? l10n.profileUpdated : localizeError(auth.error, l10n, l10n.profileUpdateFailed))),
     );
   }
 

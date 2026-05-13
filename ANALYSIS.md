@@ -257,3 +257,12 @@ Remaining gap: evidence retrieval/retention operations are not formalized.
 - Added profile update endpoint `PATCH /users/me` and settings UI flow.
 - Added async registration welcome-email queue with retry/dead-letter handling.
 - Mitigated auth enumeration by using unified login error response (`Invalid credentials`).
+
+
+## May 12, 2026 security hardening update
+- Socket authentication upgraded to JWT-bound identity at handshake; `join` must match token subject.
+- Added DB-backed request rate-limiting buckets and applied API limiter to protected `/users` and `/messages` routes.
+- Auth rate limiting remains in place for `/register` and `/login` with separate tunables.
+
+- Wave 2 implemented: client token/user session persistence and 401-triggered re-auth handling on protected UI fetch/update paths.
+- Wave 3 implemented: composite message pagination cursor (`before`,`beforeId`) and webhook-based email provider integration path.

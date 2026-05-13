@@ -25,7 +25,7 @@ Current runtime helper services used by `index.js` / `app.js`:
 - `services/runtime-hardening.service.js` (env file bootstrap + production hardening checks)
 - `services/http-config.service.js` (CORS allowlist parsing/options)
 - `db/connection.js` and `db/migrations.js`
-- `repositories/*.repository.js`
+- `repositories/*.repository.js` (includes `rate-limit.repository.js` for DB-backed throttling state)
 - `services/*.service.js`
 - `routes/*.routes.js`
 - `sockets/chat.socket.js`
@@ -40,7 +40,7 @@ If `backend/.env` is missing, backend will auto-create it from `backend/.env.exa
 
 `backend/.env.example` includes defaults/placeholders for:
 - compliance/auth (`REGISTRATION_POLICY`, `TERMS_VERSION`, `USER_AGREEMENT_URL`)
-- auth abuse controls (`AUTH_RATE_LIMIT_WINDOW_MS`, `AUTH_RATE_LIMIT_MAX_ATTEMPTS`)
+- auth abuse controls (`RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_ATTEMPTS`)
 - message crypto (`MESSAGE_ENCRYPTION_KEY`, `MESSAGE_ENCRYPTION_PREVIOUS_KEYS`)
 - runtime hardening (`CORS_ALLOWLIST`, `SESSION_COOKIE_SECURE`)
 
@@ -92,18 +92,13 @@ on the same Wi-Fi.
 
 ## 4) Socket identity model
 
-Each Socket.IO client must call `join` with its userId immediately after connecting.
-The backend stores that value in `socket.data.userId` and uses it to authenticate all
-subsequent events on that socket.
+Socket.IO now requires JWT at handshake (`auth.token`, query `token`, or `Authorization` header).
+The backend verifies the token and binds socket identity from JWT `sub`.
 
-- `join(userId)` — registers the socket's identity; a second call with a different userId
-  disconnects the socket.
-- `sendMessage({ from, to, text, clientToken })` — the `from` field is verified against
-  `socket.data.userId`. Mismatches are rejected with `Sender identity mismatch` and logged.
+- `join(userId)` must match JWT `sub`; mismatch disconnects the socket.
+- `sendMessage({ from, to, text, clientToken })` still validates `from === socket identity`.
 
-This prevents any connected client from forging messages as another user.
-
-REST endpoints now require `Authorization: Bearer <token>` and verify JWT claims.
+REST endpoints also require `Authorization: Bearer <token>` and verify JWT claims.
 
 ## 5) Quick sanity checks
 
@@ -116,7 +111,7 @@ Use this token for protected routes:
 - `GET /users` — returns current user's private contacts list
 - `GET /users/discover` — returns all users not yet in contacts
 - `POST /users/contacts` — add a user to current user contacts (optional nickname)
-- `GET /messages/:fromId/:toId?before=<ISO8601>&limit=50` — paginated history (max limit 50)
+- `GET /messages/:fromId/:toId?before=<ISO8601>&beforeId=<id>&limit=50` — paginated history (max limit 50)
 - `PATCH /users/me` — update own `email`, `phoneNumber`, `name`
 - `DELETE /users/me` — deletes current user data (soft delete by default, hard delete when `HARD_DELETE_USERS=1`)
 
@@ -264,7 +259,7 @@ flutter run --dart-define=CHAT_OWNER_NAME="Family Server Admin"
   - `open_email`: non-RU email domains permitted.
 - `TERMS_VERSION` (default: `2026-03-31`) — stored with user consent metadata.
 - `USER_AGREEMENT_URL` — stored with consent evidence for each registration.
-- `AUTH_RATE_LIMIT_WINDOW_MS` / `AUTH_RATE_LIMIT_MAX_ATTEMPTS` — control auth rate limiting.
+- `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX_ATTEMPTS` — control auth rate limiting.
 - `MAIL_SENDER` — from-address used by welcome-email notifications queue worker.
 - `EMAIL_QUEUE_POLL_MS` — queue polling interval in milliseconds.
 
@@ -295,3 +290,10 @@ Backend stores auth/consent audit events in `compliance_events`:
 Successful registration enqueues a welcome email into `outbound_emails`.
 A background worker processes queued emails with retry and dead-letter states (`queued`/`retry`/`sent`/`dead_letter`).
 
+
+
+## Email provider integration
+
+Welcome-email queue supports two providers:
+- `EMAIL_PROVIDER=log` (default): logs email sends to stdout.
+- `EMAIL_PROVIDER=webhook`: sends POST JSON to `EMAIL_WEBHOOK_URL` with optional bearer `EMAIL_WEBHOOK_TOKEN`.

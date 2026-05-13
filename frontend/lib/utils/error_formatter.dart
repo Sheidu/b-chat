@@ -16,3 +16,16 @@ String formatErrorMessage(String? error, AppLocalizations l10n, String fallbackM
   
   return fallbackMessage;
 }
+
+
+String localizeError(String? error, AppLocalizations l10n, String fallbackMessage) {
+  if (error == null || error.isEmpty) return fallbackMessage;
+  if (error == 'registrationFailed') return l10n.registrationFailed;
+  if (error == 'loginFailed') return l10n.loginFailed;
+  if (error == 'profileUpdateFailed') return l10n.profileUpdateFailed;
+  if (error.startsWith('networkError:')) {
+    final details = error.substring('networkError:'.length);
+    return l10n.networkError(details);
+  }
+  return error;
+}

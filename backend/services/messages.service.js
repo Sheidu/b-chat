@@ -14,12 +14,16 @@ function parseLimit(value) {
   return Math.min(parsed, 50);
 }
 
-function parseBefore(value) {
-  if (value == null || value === '') return null;
-  if (typeof value !== 'string') return null;
-  const parsed = new Date(value);
+function parseBeforeCursor(before, beforeId) {
+  if (before == null || before === "") return null;
+  if (typeof before !== "string") return null;
+  const parsed = new Date(before);
   if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
+  const ts = parsed.toISOString();
+  if (beforeId == null || beforeId === "") return { timestamp: ts, id: null };
+  const parsedId = parsePositiveInt(beforeId);
+  if (!parsedId) return null;
+  return { timestamp: ts, id: parsedId };
 }
 
 function normalizeMessageText(text) {
@@ -57,11 +61,11 @@ function buildMessagesService({ messagesRepository, complianceRepository, messag
     }
   }
 
-  function listConversation(fromId, toId, { requesterUserId, before, limit } = {}) {
+  function listConversation(fromId, toId, { requesterUserId, before, beforeId, limit } = {}) {
     const normalizedFromId = parsePositiveInt(fromId);
     const normalizedToId = parsePositiveInt(toId);
     const normalizedLimit = parseLimit(limit);
-    const normalizedBefore = parseBefore(before);
+    const normalizedBefore = parseBeforeCursor(before, beforeId);
 
     if (!normalizedFromId || !normalizedToId) {
       return { status: 400, body: { error: 'Invalid participant ids' } };
@@ -69,8 +73,8 @@ function buildMessagesService({ messagesRepository, complianceRepository, messag
     if (!normalizedLimit) {
       return { status: 400, body: { error: 'Invalid limit query param' } };
     }
-    if (before != null && normalizedBefore === null) {
-      return { status: 400, body: { error: 'Invalid before query param' } };
+    if ((before != null || beforeId != null) && normalizedBefore === null) {
+      return { status: 400, body: { error: "Invalid before cursor params" } };
     }
     if (requesterUserId !== normalizedFromId && requesterUserId !== normalizedToId) {
       return { status: 403, body: { error: 'Forbidden conversation access' } };

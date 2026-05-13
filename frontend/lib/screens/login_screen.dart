@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_formatter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -198,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return l10n.loginFailed;
     }
     // Fallback: return original server message if no match
-    return serverError;
+    return localizeError(serverError, l10n, l10n.loginFailed);
   }
 
   @override

@@ -15,7 +15,8 @@ const { registerChatSocketHandlers } = require('./sockets/chat.socket');
 const { createMessageCrypto } = require('./security/message-crypto');
 const { ensureEnvFile, runProductionHardeningChecks } = require('./services/runtime-hardening.service');
 const { parseCorsOrigins } = require('./services/http-config.service');
-const { createAuthRateLimitMiddleware } = require('./services/auth-rate-limit.service');
+const { createRateLimitMiddleware } = require('./services/auth-rate-limit.service');
+const { buildRateLimitRepository } = require('./repositories/rate-limit.repository');
 const { buildJwtAuthService } = require('./services/jwt-auth.service');
 const { buildNotificationService } = require('./services/notification.service');
 const { buildNotificationsRepository } = require('./repositories/notifications.repository');
@@ -36,12 +37,15 @@ const sessionCookieSecure = process.env.SESSION_COOKIE_SECURE || 'auto';
 const messageEncryptionKey = process.env.MESSAGE_ENCRYPTION_KEY || '';
 const previousMessageEncryptionKeys = process.env.MESSAGE_ENCRYPTION_PREVIOUS_KEYS || '';
 const userAgreementUrl = process.env.USER_AGREEMENT_URL || '';
-const authRateLimitWindowMs = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 60_000);
-const authRateLimitMaxAttempts = Number(process.env.AUTH_RATE_LIMIT_MAX_ATTEMPTS || 12);
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
+const rateLimitMaxAttempts = Number(process.env.RATE_LIMIT_MAX_ATTEMPTS || 12);
 const jwtSecret = process.env.JWT_SECRET || 'change-me-in-production-jwt-secret';
 const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
 const hardDeleteUsers = process.env.HARD_DELETE_USERS === '1';
 const mailSender = process.env.MAIL_SENDER || 'noreply@family-chat.local';
+const emailProvider = process.env.EMAIL_PROVIDER || 'log';
+const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL || '';
+const emailWebhookToken = process.env.EMAIL_WEBHOOK_TOKEN || '';
 const emailQueuePollMs = Number(process.env.EMAIL_QUEUE_POLL_MS || 15000);
 
 runProductionHardeningChecks({
@@ -78,7 +82,20 @@ const io = new Server({
 const jwtAuthService = buildJwtAuthService({ secret: jwtSecret, expiresIn: jwtExpiresIn });
 const notificationService = buildNotificationService({ notificationsRepository, senderEmail: mailSender });
 const mailTransport = {
-  send({ to, subject }) {
+  async send({ from, to, subject, text }) {
+    if (emailProvider === 'webhook' && emailWebhookUrl) {
+      const response = await fetch(emailWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(emailWebhookToken ? { Authorization: `Bearer ${emailWebhookToken}` } : {}),
+        },
+        body: JSON.stringify({ from, to, subject, text }),
+      });
+      if (!response.ok) throw new Error(`Webhook provider failed with ${response.status}`);
+      return;
+    }
+
     console.log(`[mail] to=${to} subject=${subject}`);
   },
 };
@@ -100,23 +117,40 @@ const authService = buildAuthService({
 
 const usersService = buildUsersService({ usersRepository, complianceRepository, hardDeleteUsers });
 const messagesService = buildMessagesService({ messagesRepository, complianceRepository, messageCrypto });
-const authRateLimitMiddleware = createAuthRateLimitMiddleware({
-  windowMs: authRateLimitWindowMs,
-  maxAttempts: authRateLimitMaxAttempts,
+const rateLimitStore = buildRateLimitRepository(db);
+const rateLimitMiddleware = createRateLimitMiddleware({
+  rateLimitStore,
+  windowMs: rateLimitWindowMs,
+  maxAttempts: rateLimitMaxAttempts,
+  scope: "http",
+  errorMessage: "Too many requests. Please retry later.",
 });
+
+
+function tokenRevocationMiddleware(req, res, next) {
+  if (!req.auth || !req.auth.userId) return next();
+  const user = usersRepository.findUserById(req.auth.userId);
+  if (!user || user.deleted_at) return res.status(401).json({ error: 'Invalid or expired authorization token' });
+  const currentVersion = Number.isInteger(user.token_version) ? user.token_version : 1;
+  if (currentVersion !== req.auth.tokenVersion) {
+    return res.status(401).json({ error: 'Session revoked. Please login again.' });
+  }
+  return next();
+}
 
 const app = createApp({
   authService,
   usersService,
   messagesService,
   corsAllowlist,
-  authRateLimitMiddleware,
+  rateLimitMiddleware,
   authMiddleware: jwtAuthService.authMiddleware,
+  tokenRevocationMiddleware,
 });
 const server = http.createServer(app);
 io.attach(server);
 
-registerChatSocketHandlers({ io, messagesService });
+registerChatSocketHandlers({ io, messagesService, jwtAuthService });
 
 const port = process.env.PORT || 3000;
 server.listen(port, () => {

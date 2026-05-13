@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthProvider with ChangeNotifier {
   Map<String, dynamic>? _user; // {id, email, name}
@@ -16,6 +17,45 @@ class AuthProvider with ChangeNotifier {
   bool get isLoggedIn => _user != null && _token != null;
 
   String get baseUrl => AppConfig.baseUrl;
+
+  static const _tokenKey = 'auth_token';
+  static const _userKey = 'auth_user';
+
+  AuthProvider() {
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(_tokenKey);
+    final userRaw = prefs.getString(_userKey);
+    if (token == null || userRaw == null) return;
+    try {
+      final parsed = jsonDecode(userRaw);
+      if (parsed is Map<String, dynamic>) {
+        _token = token;
+        _user = parsed;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_token == null || _user == null) {
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_userKey);
+      return;
+    }
+    await prefs.setString(_tokenKey, _token!);
+    await prefs.setString(_userKey, jsonEncode(_user));
+  }
+
+  Future<void> handleUnauthorized({String message = 'loginFailed'}) async {
+    _error = message;
+    await logout();
+  }
+
 
   Map<String, String> get authJsonHeaders => {
         'Content-Type': 'application/json',
@@ -62,12 +102,13 @@ class AuthProvider with ChangeNotifier {
           'name': data['name'],
           'authChannel': data['authChannel'],
         };
+        await _persistSession();
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
         final data = jsonDecode(response.body);
-        _error = data['error'] ?? 'Registration failed';
+        _error = data['error'] ?? 'registrationFailed';
       }
     } catch (e) {
       _error = 'Network error: $e';
@@ -103,12 +144,13 @@ class AuthProvider with ChangeNotifier {
           'name': data['name'],
           'authChannel': data['authChannel'],
         };
+        await _persistSession();
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
         final data = jsonDecode(response.body);
-        _error = data['error'] ?? 'Login failed';
+        _error = data['error'] ?? 'loginFailed';
       }
     } catch (e) {
       _error = 'Network error: $e';
@@ -122,7 +164,7 @@ class AuthProvider with ChangeNotifier {
 
   Future<bool> updateProfile({required String email, required String phoneNumber, required String name}) async {
     if (_token == null) {
-      _error = 'Unauthorized';
+      _error = 'loginFailed';
       notifyListeners();
       return false;
     }
@@ -136,10 +178,15 @@ class AuthProvider with ChangeNotifier {
       final data = jsonDecode(response.body);
       if (response.statusCode == 200) {
         _user = data['user'] as Map<String, dynamic>;
+        await _persistSession();
         notifyListeners();
         return true;
       }
-      _error = data['error'] ?? 'Profile update failed';
+      if (response.statusCode == 401) {
+        await handleUnauthorized();
+        return false;
+      }
+      _error = data['error'] ?? 'profileUpdateFailed';
       notifyListeners();
       return false;
     } catch (e) {
@@ -151,7 +198,7 @@ class AuthProvider with ChangeNotifier {
 
   Future<bool> deleteMyAccount() async {
     if (_token == null) {
-      _error = 'Unauthorized';
+      _error = 'loginFailed';
       notifyListeners();
       return false;
     }
@@ -163,12 +210,16 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        logout();
+        await logout();
         return true;
+      }
+      if (response.statusCode == 401) {
+        await handleUnauthorized();
+        return false;
       }
 
       final data = jsonDecode(response.body);
-      _error = data['error'] ?? 'Delete failed';
+      _error = data['error'] ?? 'profileUpdateFailed';
       notifyListeners();
       return false;
     } catch (e) {
@@ -178,9 +229,10 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  void logout() {
+  Future<void> logout() async {
     _user = null;
     _token = null;
+    await _persistSession();
     notifyListeners();
   }
 }

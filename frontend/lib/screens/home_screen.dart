@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final userId = _parseOptionalUserId(auth.user?['id']);
       
       if (userId != null && !socketService.isConnected) {
-        socketService.connect(userId);
+        socketService.connect(userId, token: auth.token);
       }
     });
     
@@ -60,6 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
         Uri.parse('${AppConfig.baseUrl}/users'),
         headers: auth.authJsonHeaders,
       );
+
+      if (response.statusCode == 401) {
+        await auth.handleUnauthorized();
+        return;
+      }
 
       if (response.statusCode == 200) {
         setState(() {

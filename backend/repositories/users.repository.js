@@ -9,6 +9,7 @@ function buildUsersRepository(db) {
   const updateUserProfileStmt = db.prepare('UPDATE users SET email = ?, phone_number = ?, name = ? WHERE id = ? AND deleted_at IS NULL');
   const findUserByIdStmt = db.prepare('SELECT * FROM users WHERE id = ?');
   const upgradePasswordStmt = db.prepare('UPDATE users SET password = ? WHERE id = ?');
+  const incrementTokenVersionStmt = db.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ? AND deleted_at IS NULL');
 
   const listContactsForUserStmt = db.prepare(`
     SELECT u.id, u.email, u.phone_number, u.name, c.nickname, c.created_at
@@ -101,6 +102,10 @@ function buildUsersRepository(db) {
     },
     upgradePasswordHash(userId, passwordHash) {
       return upgradePasswordStmt.run(passwordHash, userId);
+    },
+    incrementTokenVersion(userId) {
+      incrementTokenVersionStmt.run(userId);
+      return findUserByIdStmt.get(userId) || null;
     },
     listContactsForUser(userId) {
       return listContactsForUserStmt.all(userId);
