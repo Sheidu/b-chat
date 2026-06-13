@@ -115,7 +115,7 @@ const authService = buildAuthService({
   },
 });
 
-const usersService = buildUsersService({ usersRepository, complianceRepository, hardDeleteUsers });
+const usersService = buildUsersService({ usersRepository, complianceRepository, hardDeleteUsers, jwtAuthService });
 const messagesService = buildMessagesService({ messagesRepository, complianceRepository, messageCrypto });
 const rateLimitStore = buildRateLimitRepository(db);
 const rateLimitMiddleware = createRateLimitMiddleware({
@@ -127,14 +127,18 @@ const rateLimitMiddleware = createRateLimitMiddleware({
 });
 
 
+function validateUserToken({ userId, tokenVersion }) {
+  const user = usersRepository.findUserById(userId);
+  if (!user || user.deleted_at) return { ok: false };
+  const currentVersion = Number.isInteger(user.token_version) ? user.token_version : 1;
+  if (currentVersion !== tokenVersion) return { ok: false };
+  return { ok: true, user };
+}
+
 function tokenRevocationMiddleware(req, res, next) {
   if (!req.auth || !req.auth.userId) return next();
-  const user = usersRepository.findUserById(req.auth.userId);
-  if (!user || user.deleted_at) return res.status(401).json({ error: 'Invalid or expired authorization token' });
-  const currentVersion = Number.isInteger(user.token_version) ? user.token_version : 1;
-  if (currentVersion !== req.auth.tokenVersion) {
-    return res.status(401).json({ error: 'Session revoked. Please login again.' });
-  }
+  const validation = validateUserToken({ userId: req.auth.userId, tokenVersion: req.auth.tokenVersion });
+  if (!validation.ok) return res.status(401).json({ error: 'Invalid or expired authorization token' });
   return next();
 }
 
@@ -150,7 +154,7 @@ const app = createApp({
 const server = http.createServer(app);
 io.attach(server);
 
-registerChatSocketHandlers({ io, messagesService, jwtAuthService });
+registerChatSocketHandlers({ io, messagesService, jwtAuthService, validateSocketUserToken: validateUserToken });
 
 const port = process.env.PORT || 3000;
 server.listen(port, () => {

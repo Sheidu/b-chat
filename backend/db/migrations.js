@@ -81,9 +81,11 @@ function runMigrations(db) {
 
   ensureColumn(db, 'messages', 'client_token', 'client_token TEXT');
 
+  db.exec(`DROP INDEX IF EXISTS idx_messages_client_token`);
+
   db.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_token
-    ON messages(client_token)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_conversation_client_token
+    ON messages(from_id, to_id, client_token)
     WHERE client_token IS NOT NULL
   `);
 

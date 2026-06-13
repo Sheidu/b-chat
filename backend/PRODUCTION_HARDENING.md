@@ -18,6 +18,7 @@ Protected HTTP routes now require JWT bearer auth:
 - `GET /users/discover`
 - `POST /users/contacts`
 - `GET /messages/:fromId/:toId`
+- `PATCH /users/me`
 - `DELETE /users/me`
 
 JWT settings:
@@ -99,7 +100,9 @@ Always keep `SQL_VERBOSE=0` in production.
 ## Socket authentication (implemented)
 
 Socket connections now require a valid JWT token (handshake auth/query/header).
-`join(userId)` must match `sub` from the verified token or the socket is disconnected.
+The socket layer verifies the JWT, rejects deleted users or stale `token_version` values, and then
+binds identity from `sub`. `join(userId)` must match `sub` from the verified token or the socket is
+disconnected; the join event only confirms the socket joins its own room.
 
 
 ## Message pagination cursor
@@ -116,3 +119,10 @@ Configure real provider delivery using webhook mode:
 - `EMAIL_WEBHOOK_TOKEN=<secret>`
 
 Default `EMAIL_PROVIDER=log` is local/dev fallback only.
+
+
+## Soft-delete email reservation
+
+Soft-deleted user rows intentionally retain and permanently reserve their email address. This keeps
+audit/account-history continuity and prevents a future account from inheriting an email identity that
+previously belonged to a deleted row.

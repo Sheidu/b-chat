@@ -178,6 +178,10 @@ class AuthProvider with ChangeNotifier {
       final data = jsonDecode(response.body);
       if (response.statusCode == 200) {
         _user = data['user'] as Map<String, dynamic>;
+        final nextToken = data['token'];
+        if (nextToken is String && nextToken.isNotEmpty) {
+          _token = nextToken;
+        }
         await _persistSession();
         notifyListeners();
         return true;

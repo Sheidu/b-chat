@@ -13,7 +13,10 @@ function createInMemoryDb() {
       text TEXT NOT NULL,
       client_token TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
+    );
+    CREATE UNIQUE INDEX idx_messages_conversation_client_token
+    ON messages(from_id, to_id, client_token)
+    WHERE client_token IS NOT NULL
   `);
   return db;
 }
@@ -58,6 +61,23 @@ test('messages repository supports composite cursor (timestamp + id) for stable 
 
   assert.equal(nextPage.length, 1);
   assert.equal(nextPage[0].text, 'm1');
+
+  db.close();
+});
+
+
+test('messages repository scopes client token lookup to one direction of a conversation', () => {
+  const db = createInMemoryDb();
+  const repo = buildMessagesRepository(db);
+
+  repo.createMessage(1, 2, 'first', 'same-token');
+  repo.createMessage(2, 1, 'reply', 'same-token');
+
+  const first = repo.findMessageByConversationClientToken(1, 2, 'same-token');
+  const reply = repo.findMessageByConversationClientToken(2, 1, 'same-token');
+
+  assert.equal(first.text, 'first');
+  assert.equal(reply.text, 'reply');
 
   db.close();
 });

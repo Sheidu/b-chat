@@ -16,8 +16,10 @@ import 'screens/settings_screen.dart';
 const int _singleInstancePort = 47123;
 ServerSocket? _singleInstanceServer;
 
+bool get _isDesktopPlatform => !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
 Future<bool> _ensureSingleInstance() async {
-  if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) return true;
+  if (!_isDesktopPlatform) return true;
   try {
     _singleInstanceServer = await ServerSocket.bind(InternetAddress.loopbackIPv4, _singleInstancePort);
     _singleInstanceServer!.listen((client) {
@@ -41,7 +43,7 @@ Future<bool> _ensureSingleInstance() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+  if (_isDesktopPlatform) {
     await windowManager.ensureInitialized();
   }
 

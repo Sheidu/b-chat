@@ -197,7 +197,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String _nextClientToken() {
     final nowMicros = DateTime.now().toUtc().microsecondsSinceEpoch;
-    final randomPart = Random.secure().nextInt(1 << 32).toRadixString(16);
+    // Use a numeric literal instead of `1 << 32`: on Flutter Web that shift can
+    // be evaluated through JavaScript's 32-bit shift semantics and become 0,
+    // which makes Random.nextInt throw `RangeError: max ... was 0`.
+    final randomPart = Random.secure().nextInt(0x100000000).toRadixString(16);
     final counterPart = (_clientTokenCounter++).toRadixString(16);
     return '${_currentUserId}_${nowMicros}_${counterPart}_$randomPart';
   }

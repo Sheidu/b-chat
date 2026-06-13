@@ -29,7 +29,7 @@ function isValidEmail(value) {
   return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
 }
 
-function buildUsersService({ usersRepository, complianceRepository, hardDeleteUsers = false }) {
+function buildUsersService({ usersRepository, complianceRepository, hardDeleteUsers = false, jwtAuthService }) {
   function listUsers(authUserId) {
     if (!authUserId) {
       return { status: 401, body: { error: 'Unauthorized' } };
@@ -97,7 +97,10 @@ function buildUsersService({ usersRepository, complianceRepository, hardDeleteUs
     const duplicate = usersRepository.findUserByEmailOrPhone(nextEmail, nextPhone);
     if (duplicate && duplicate.id !== userId) return { status: 400, body: { error: 'Email or phone already taken' } };
 
-    usersRepository.updateUserProfile(userId, nextEmail, nextPhone, nextName);
+    const updatedUser = usersRepository.updateUserProfile(userId, nextEmail, nextPhone, nextName);
+    const nextTokenVersion = updatedUser && Number.isInteger(updatedUser.token_version)
+      ? updatedUser.token_version
+      : (Number.isInteger(user.token_version) ? user.token_version + 1 : 2);
 
     if (complianceRepository && typeof complianceRepository.createEvent === 'function') {
       complianceRepository.createEvent({
@@ -113,7 +116,24 @@ function buildUsersService({ usersRepository, complianceRepository, hardDeleteUs
       });
     }
 
-    return { status: 200, body: { success: true, user: { id: userId, email: nextEmail, phoneNumber: nextPhone, name: nextName } } };
+    const responseUser = {
+      id: userId,
+      email: nextEmail,
+      phoneNumber: nextPhone,
+      name: nextName,
+      authChannel: user.auth_channel || 'email',
+      tokenVersion: nextTokenVersion,
+    };
+    return {
+      status: 200,
+      body: {
+        success: true,
+        user: responseUser,
+        ...(jwtAuthService && typeof jwtAuthService.issueToken === 'function'
+          ? { token: jwtAuthService.issueToken(responseUser) }
+          : {}),
+      },
+    };
   }
 
   function deleteCurrentUser({ userId, context = {} }) {

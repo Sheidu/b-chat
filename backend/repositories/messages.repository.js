@@ -15,7 +15,7 @@ function buildMessagesRepository(db) {
     'INSERT INTO messages (from_id, to_id, text, client_token) VALUES (?, ?, ?, ?)'
   );
 
-  const findByClientTokenStmt = db.prepare('SELECT * FROM messages WHERE client_token = ? LIMIT 1');
+  const findByConversationClientTokenStmt = db.prepare('SELECT * FROM messages WHERE from_id = ? AND to_id = ? AND client_token = ? LIMIT 1');
 
   return {
     listMessagesBetweenUsers(fromId, toId, { before = null, limit = 50 } = {}) {
@@ -28,8 +28,8 @@ function buildMessagesRepository(db) {
     createMessage(fromId, toId, text, clientToken) {
       return createMessageStmt.run(fromId, toId, text, clientToken);
     },
-    findMessageByClientToken(clientToken) {
-      return findByClientTokenStmt.get(clientToken) || null;
+    findMessageByConversationClientToken(fromId, toId, clientToken) {
+      return findByConversationClientTokenStmt.get(fromId, toId, clientToken) || null;
     },
   };
 }
