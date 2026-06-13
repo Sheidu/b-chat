@@ -149,12 +149,16 @@ function buildMessagesService({ messagesRepository, complianceRepository, messag
         },
       };
     } catch (err) {
-      if (err && /UNIQUE constraint failed: messages\.client_token/.test(String(err.message))) {
+      if (err && /UNIQUE constraint failed: messages\.(from_id, messages\.to_id, messages\.client_token|client_token)/.test(String(err.message))) {
         const existing =
-          normalizedClientToken == null
+          normalizedClientToken == null || typeof messagesRepository.findMessageByConversationClientToken !== 'function'
             ? null
-            : messagesRepository.findMessageByClientToken(normalizedClientToken);
-        if (existing) {
+            : messagesRepository.findMessageByConversationClientToken(
+                normalizedFrom,
+                normalizedTo,
+                normalizedClientToken
+              );
+        if (existing && existing.from_id === normalizedFrom && existing.to_id === normalizedTo) {
           return {
             status: 200,
             body: {

@@ -1,6 +1,8 @@
-function registerChatSocketHandlers({ io, messagesService, jwtAuthService }) {
+function registerChatSocketHandlers({ io, messagesService, jwtAuthService, validateSocketUserToken, logger = console }) {
+  const resolvedLogger = logger || {};
+
   io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    if (typeof resolvedLogger.log === 'function') resolvedLogger.log('User connected:', socket.id);
 
     const token = _extractSocketToken(socket);
     if (!jwtAuthService || !token) {
@@ -20,16 +22,23 @@ function registerChatSocketHandlers({ io, messagesService, jwtAuthService }) {
       socket.disconnect(true);
       return;
     }
+
+    if (typeof validateSocketUserToken === 'function') {
+      const validation = validateSocketUserToken({ userId: tokenUserId, tokenVersion: claims.token_version });
+      if (!validation || validation.ok !== true) {
+        socket.disconnect(true);
+        return;
+      }
+    }
+
     socket.data.userId = tokenUserId;
 
     // ─── Authentication ───────────────────────────────────────────────────────
-    // The client calls `join` immediately after connecting and passes its userId.
-    // We store that value on the socket so every subsequent handler can verify
-    // the caller is who they claim to be.
-    //
-    // NOTE: this is a lightweight trust model suitable for a private family app.
-    // For a public deployment, replace this with a signed JWT / session cookie
-    // that is validated here instead of trusting the client-supplied value.
+    // The socket JWT is verified during connection setup above. The client still
+    // calls `join` with its userId, but that value is only used to confirm the
+    // socket joins its own room and cannot subscribe to another user's room.
+    // Token revocation/deletion checks must be enforced by `validateSocketUserToken`
+    // so WebSocket behavior stays aligned with protected HTTP routes.
     // ─────────────────────────────────────────────────────────────────────────
 
     socket.on('join', (userId) => {
@@ -76,7 +85,7 @@ function registerChatSocketHandlers({ io, messagesService, jwtAuthService }) {
           ack({ ok: true, message: result.body });
         }
       } catch (err) {
-        console.error('Message insert error:', err);
+        if (typeof resolvedLogger.error === 'function') resolvedLogger.error('Message insert error:', err);
         if (typeof ack === 'function') {
           ack({ ok: false, error: 'Message persistence failed.' });
         }
@@ -84,7 +93,7 @@ function registerChatSocketHandlers({ io, messagesService, jwtAuthService }) {
     });
 
     socket.on('disconnect', () => {
-      console.log(`User disconnected: ${socket.id} (was user ${socket.data.userId ?? 'unknown'})`);
+      if (typeof resolvedLogger.log === 'function') resolvedLogger.log(`User disconnected: ${socket.id} (was user ${socket.data.userId ?? 'unknown'})`);
     });
   });
 }

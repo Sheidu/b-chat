@@ -6,7 +6,7 @@ function buildUsersRepository(db) {
   const findUserByEmailStmt = db.prepare('SELECT * FROM users WHERE email = ?');
   const findUserByPhoneStmt = db.prepare('SELECT * FROM users WHERE phone_number = ?');
   const findUserByEmailOrPhoneStmt = db.prepare('SELECT * FROM users WHERE email = ? OR phone_number = ?');
-  const updateUserProfileStmt = db.prepare('UPDATE users SET email = ?, phone_number = ?, name = ? WHERE id = ? AND deleted_at IS NULL');
+  const updateUserProfileStmt = db.prepare('UPDATE users SET email = ?, phone_number = ?, name = ?, token_version = token_version + 1 WHERE id = ? AND deleted_at IS NULL');
   const findUserByIdStmt = db.prepare('SELECT * FROM users WHERE id = ?');
   const upgradePasswordStmt = db.prepare('UPDATE users SET password = ? WHERE id = ?');
   const incrementTokenVersionStmt = db.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ? AND deleted_at IS NULL');
@@ -98,7 +98,8 @@ function buildUsersRepository(db) {
       return findUserByIdStmt.get(userId) || null;
     },
     updateUserProfile(userId, email, phoneNumber, name) {
-      return updateUserProfileStmt.run(email, phoneNumber, name, userId);
+      updateUserProfileStmt.run(email, phoneNumber, name, userId);
+      return findUserByIdStmt.get(userId) || null;
     },
     upgradePasswordHash(userId, passwordHash) {
       return upgradePasswordStmt.run(passwordHash, userId);

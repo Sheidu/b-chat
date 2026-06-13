@@ -93,12 +93,13 @@ on the same Wi-Fi.
 ## 4) Socket identity model
 
 Socket.IO now requires JWT at handshake (`auth.token`, query `token`, or `Authorization` header).
-The backend verifies the token and binds socket identity from JWT `sub`.
+The backend verifies the token, rejects deleted users or stale `token_version` values, and binds
+socket identity from JWT `sub`.
 
-- `join(userId)` must match JWT `sub`; mismatch disconnects the socket.
+- `join(userId)` must match JWT `sub`; mismatch disconnects the socket and only the user's own room is joined.
 - `sendMessage({ from, to, text, clientToken })` still validates `from === socket identity`.
 
-REST endpoints also require `Authorization: Bearer <token>` and verify JWT claims.
+REST endpoints also require `Authorization: Bearer <token>` and verify JWT claims/token revocation.
 
 ## 5) Quick sanity checks
 
@@ -112,7 +113,7 @@ Use this token for protected routes:
 - `GET /users/discover` — returns all users not yet in contacts
 - `POST /users/contacts` — add a user to current user contacts (optional nickname)
 - `GET /messages/:fromId/:toId?before=<ISO8601>&beforeId=<id>&limit=50` — paginated history (max limit 50)
-- `PATCH /users/me` — update own `email`, `phoneNumber`, `name`
+- `PATCH /users/me` — update own `email`, `phoneNumber`, `name`; returns a fresh JWT because profile updates bump `token_version`
 - `DELETE /users/me` — deletes current user data (soft delete by default, hard delete when `HARD_DELETE_USERS=1`)
 
 Example:
@@ -150,8 +151,9 @@ GitHub Actions (`.github/workflows/ci.yml`) runs:
 - SQLite database file is always `backend/family-chat.db`.
 - Passwords are hashed with `bcrypt` on registration (`BCRYPT_SALT_ROUNDS`, default `12`).
 - Registration now requires both email and RU phone number (`+7XXXXXXXXXX` or `8XXXXXXXXXX`), normalized to E.164 (`+7...`).
+- Soft-deleted accounts permanently reserve their email address for audit/account-history continuity; users cannot re-register with an email from a soft-deleted row.
 - Login supports migration of historical plaintext passwords to bcrypt after a successful login.
-- `client_token` uses `ALTER TABLE ... ADD COLUMN` migration logic and **does not clear existing rows**.
+- `client_token` uses `ALTER TABLE ... ADD COLUMN` migration logic and **does not clear existing rows**; idempotency is scoped to `(from_id, to_id, client_token)`.
 - `new Database(dbPath, ...)` does **not** wipe an existing file, but will create a new DB file
   if one does not exist.
 - To fail fast instead of creating a new DB file accidentally: `DB_FILE_MUST_EXIST=1`.

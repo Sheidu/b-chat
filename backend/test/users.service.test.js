@@ -80,3 +80,43 @@ test('users service deletes current user and logs compliance event', () => {
   assert.equal(result.body.mode, 'hard_delete');
   assert.equal(events[0].eventType, 'delete');
 });
+
+test('users service bumps token version and returns fresh token after profile update', () => {
+  const issued = [];
+  const service = buildUsersService({
+    usersRepository: {
+      findUserById(userId) {
+        assert.equal(userId, 7);
+        return { id: 7, email: 'old@example.ru', phone_number: '+79990000000', name: 'Old', auth_channel: 'email', token_version: 3 };
+      },
+      findUserByEmailOrPhone() {
+        return null;
+      },
+      updateUserProfile(userId, email, phoneNumber, name) {
+        assert.equal(userId, 7);
+        assert.equal(email, 'new@example.ru');
+        assert.equal(phoneNumber, '+79990000001');
+        assert.equal(name, 'New');
+        return { id: 7, email, phone_number: phoneNumber, name, auth_channel: 'email', token_version: 4 };
+      },
+    },
+    jwtAuthService: {
+      issueToken(user) {
+        issued.push(user);
+        return `token-v${user.tokenVersion}`;
+      },
+    },
+  });
+
+  const result = service.updateCurrentUser({
+    userId: 7,
+    email: 'New@Example.RU',
+    phoneNumber: '+7 999 000 00 01',
+    name: 'New',
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.token, 'token-v4');
+  assert.equal(result.body.user.tokenVersion, 4);
+  assert.equal(issued[0].tokenVersion, 4);
+});

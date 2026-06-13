@@ -13,7 +13,7 @@ test('messages service encrypts stored text and decrypts on read', () => {
     listMessagesBetweenUsers() {
       return [{ ...stored[0] }];
     },
-    findMessageByClientToken(token) {
+    findMessageByConversationClientToken(_fromId, _toId, token) {
       return stored.find((message) => message.client_token === token) || null;
     },
   };
@@ -40,7 +40,7 @@ test('messages service validates malformed and boundary payloads', () => {
       listMessagesBetweenUsers() {
         return [];
       },
-      findMessageByClientToken() {
+      findMessageByConversationClientToken() {
         return null;
       },
     },
@@ -75,7 +75,7 @@ test('messages service returns existing message for duplicate client token', () 
       listMessagesBetweenUsers() {
         return [];
       },
-      findMessageByClientToken() {
+      findMessageByConversationClientToken() {
         return stored;
       },
     },
@@ -85,4 +85,29 @@ test('messages service returns existing message for duplicate client token', () 
   const result = service.createMessage({ from: 1, to: 2, text: 'persisted', clientToken: 'dup-token' });
   assert.equal(result.status, 200);
   assert.equal(result.body.id, 3);
+});
+
+
+test('messages service rejects duplicate client token from a different conversation', () => {
+  const duplicateErr = new Error('UNIQUE constraint failed: messages.from_id, messages.to_id, messages.client_token');
+
+  const service = buildMessagesService({
+    messagesRepository: {
+      createMessage() {
+        throw duplicateErr;
+      },
+      listMessagesBetweenUsers() {
+        return [];
+      },
+      findMessageByConversationClientToken() {
+        return { id: 4, from_id: 9, to_id: 2, text: 'other', client_token: 'dup-token' };
+      },
+    },
+    messageCrypto: null,
+  });
+
+  assert.throws(
+    () => service.createMessage({ from: 1, to: 2, text: 'persisted', clientToken: 'dup-token' }),
+    /UNIQUE constraint failed/
+  );
 });
