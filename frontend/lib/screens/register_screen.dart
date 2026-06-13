@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../config/app_config.dart';
+import '../utils/error_formatter.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -79,7 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text(auth.error ?? l10n.registrationFailed),
+        content: Text(localizeError(auth.error, l10n, l10n.registrationFailed)),
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 4),
       ),

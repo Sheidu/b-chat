@@ -32,28 +32,36 @@ class SocketService with ChangeNotifier {
   final Set<void Function(String)> _failureListeners = {};
   final Set<VoidCallback> _usersChangedListeners = {};
   bool _usersChangedListenerRegistered = false;
+  int? _boundUserId;
+  String? _boundToken;
 
   bool get isConnected => _socket?.connected ?? false;
   SocketConnectionState get connectionState => _connectionState;
   static String get baseUrl => AppConfig.baseUrl;
 
-  void connect(int userId) {
+  void connect(int userId, {String? token}) {
+    final shouldRebindIdentity = _boundUserId != null && (_boundUserId != userId || _boundToken != token);
+
     if (_socket != null) {
-      if (_socket!.connected) {
+      if (_socket!.connected && !shouldRebindIdentity) {
         _connectionState = SocketConnectionState.connected;
         notifyListeners();
         return;
       }
-      _socket!.connect();
-      _connectionState = SocketConnectionState.connecting;
-      notifyListeners();
-      return;
+
+      // Recreate socket on reconnect attempts or auth identity changes.
+      _socket!.dispose();
+      _socket = null;
     }
+
+    _boundUserId = userId;
+    _boundToken = token;
 
     _connectionState = SocketConnectionState.connecting;
     notifyListeners();
 
     _socket = io.io(baseUrl, <String, dynamic>{
+      if (token != null) 'auth': {'token': token},
       'transports': ['websocket'],
       'forceNew': true,
       'autoConnect': false,
@@ -237,6 +245,8 @@ class SocketService with ChangeNotifier {
     if (_socket?.connected ?? false) _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
+    _boundUserId = null;
+    _boundToken = null;
     _pendingQueue.clear();
     _ackListeners.clear();
     _failureListeners.clear();

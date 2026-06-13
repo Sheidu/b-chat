@@ -2,7 +2,11 @@ function buildMessagesRepository(db) {
   const listMessagesBetweenUsersStmt = db.prepare(`
     SELECT * FROM messages
     WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))
-      AND (? IS NULL OR timestamp < ?)
+      AND (
+        ? IS NULL
+        OR timestamp < ?
+        OR (timestamp = ? AND (? IS NOT NULL AND id < ?))
+      )
     ORDER BY timestamp DESC, id DESC
     LIMIT ?
   `);
@@ -15,7 +19,11 @@ function buildMessagesRepository(db) {
 
   return {
     listMessagesBetweenUsers(fromId, toId, { before = null, limit = 50 } = {}) {
-      return listMessagesBetweenUsersStmt.all(fromId, toId, toId, fromId, before, before, limit).reverse();
+      const beforeTs = before ? before.timestamp : null;
+      const beforeId = before ? before.id : null;
+      return listMessagesBetweenUsersStmt
+        .all(fromId, toId, toId, fromId, beforeTs, beforeTs, beforeTs, beforeId, beforeId, limit)
+        .reverse();
     },
     createMessage(fromId, toId, text, clientToken) {
       return createMessageStmt.run(fromId, toId, text, clientToken);

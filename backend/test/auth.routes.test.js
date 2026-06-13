@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { createApp } = require('../app');
-const { createAuthRateLimitMiddleware } = require('../services/auth-rate-limit.service');
+const { createRateLimitMiddleware } = require('../services/auth-rate-limit.service');
 
 function withServer(app, run) {
   return new Promise((resolve, reject) => {
@@ -32,7 +32,7 @@ test('POST /register is rate-limited after max attempts', async () => {
     usersService: { listUsers: () => ({ status: 200, body: [] }) },
     messagesService: { listConversation: () => ({ status: 200, body: [] }) },
     corsAllowlist: 'http://localhost:3000',
-    authRateLimitMiddleware: createAuthRateLimitMiddleware({ windowMs: 60_000, maxAttempts: 2 }),
+    rateLimitMiddleware: createRateLimitMiddleware({ windowMs: 60_000, maxAttempts: 2, errorMessage: 'Too many auth attempts. Please retry later.' }),
   });
 
   await withServer(app, async (baseUrl) => {
@@ -74,7 +74,7 @@ test('register and login use separate rate-limit buckets', async () => {
     usersService: { listUsers: () => ({ status: 200, body: [] }) },
     messagesService: { listConversation: () => ({ status: 200, body: [] }) },
     corsAllowlist: 'http://localhost:3000',
-    authRateLimitMiddleware: createAuthRateLimitMiddleware({ windowMs: 60_000, maxAttempts: 2 }),
+    rateLimitMiddleware: createRateLimitMiddleware({ windowMs: 60_000, maxAttempts: 2, errorMessage: 'Too many auth attempts. Please retry later.' }),
   });
 
   await withServer(app, async (baseUrl) => {

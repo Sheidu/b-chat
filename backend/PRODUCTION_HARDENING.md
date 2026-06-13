@@ -40,10 +40,12 @@ Mode control:
 
 ## Auth abuse controls
 
-Auth endpoints are rate-limited in-process using:
+Auth endpoints and protected API routes use one unified rate-limit middleware (`createRateLimitMiddleware`). Auth uses in-memory defaults; API routes use a DB-backed repository store:
 
-- `AUTH_RATE_LIMIT_WINDOW_MS` (default `60000`)
-- `AUTH_RATE_LIMIT_MAX_ATTEMPTS` (default `12`)
+- `RATE_LIMIT_WINDOW_MS` (default `60000`)
+- `RATE_LIMIT_MAX_ATTEMPTS` (default `12`)
+
+The API limiter uses SQLite table `rate_limit_buckets` so limits survive process restarts and are shared by workers that point to the same DB file.
 
 ## Message crypto key rotation runbook (rollout + rollback)
 
@@ -92,3 +94,25 @@ SQL query logging is controlled by `SQL_VERBOSE`:
 - any other value or unset — disabled (default)
 
 Always keep `SQL_VERBOSE=0` in production.
+
+
+## Socket authentication (implemented)
+
+Socket connections now require a valid JWT token (handshake auth/query/header).
+`join(userId)` must match `sub` from the verified token or the socket is disconnected.
+
+
+## Message pagination cursor
+
+Use composite cursor params for stable paging: `before=<ISO8601>&beforeId=<messageId>`.
+This avoids duplicate/missing edge cases when timestamps are equal.
+
+
+## Email transport provider
+
+Configure real provider delivery using webhook mode:
+- `EMAIL_PROVIDER=webhook`
+- `EMAIL_WEBHOOK_URL=https://provider.example/send`
+- `EMAIL_WEBHOOK_TOKEN=<secret>`
+
+Default `EMAIL_PROVIDER=log` is local/dev fallback only.

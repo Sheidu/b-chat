@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:window_manager/window_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 
@@ -11,8 +13,40 @@ import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
 
+const int _singleInstancePort = 47123;
+ServerSocket? _singleInstanceServer;
+
+Future<bool> _ensureSingleInstance() async {
+  if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) return true;
+  try {
+    _singleInstanceServer = await ServerSocket.bind(InternetAddress.loopbackIPv4, _singleInstancePort);
+    _singleInstanceServer!.listen((client) {
+      client.listen((_) async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    });
+    return true;
+  } catch (_) {
+    try {
+      final socket = await Socket.connect(InternetAddress.loopbackIPv4, _singleInstancePort, timeout: const Duration(milliseconds: 500));
+      socket.add([1]);
+      await socket.flush();
+      await socket.close();
+    } catch (_) {}
+    return false;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    await windowManager.ensureInitialized();
+  }
+
+  final shouldRun = await _ensureSingleInstance();
+  if (!shouldRun) return;
 
   // Initialize locale provider before running app
   final localeProvider = LocaleProvider();

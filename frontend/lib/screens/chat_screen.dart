@@ -50,7 +50,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _socketService = Provider.of<SocketService>(context, listen: false);
     if (!_socketService.isConnected) {
-      _socketService.connect(_currentUserId!);
+      _socketService.connect(_currentUserId!, token: auth.token);
     }
 
     _socketService.listenDeliveryAcks((clientToken) {
@@ -95,6 +95,12 @@ class _ChatScreenState extends State<ChatScreen> {
         '${SocketService.baseUrl}/messages/$_currentUserId/$_otherUserId?limit=50',
       );
       final response = await http.get(uri, headers: auth.authJsonHeaders);
+
+      if (response.statusCode == 401) {
+        await auth.handleUnauthorized();
+        setState(() => _loadingHistory = false);
+        return;
+      }
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);

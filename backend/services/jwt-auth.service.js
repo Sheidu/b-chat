@@ -66,6 +66,7 @@ function buildJwtAuthService({ secret, expiresIn = '7d' }) {
       name: user.name,
       iat: nowSec,
       exp: nowSec + ttlSeconds,
+      token_version: Number.isInteger(user.tokenVersion) ? user.tokenVersion : 1,
     };
 
     const encodedHeader = toBase64Url(JSON.stringify(header));
@@ -111,6 +112,7 @@ function buildJwtAuthService({ secret, expiresIn = '7d' }) {
         userId,
         email: claims.email,
         name: claims.name,
+        tokenVersion: Number.isInteger(claims.token_version) ? claims.token_version : 1,
       };
 
       return next();

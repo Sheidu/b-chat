@@ -5,12 +5,13 @@ function createMessagesRoutes({ messagesService, authMiddleware }) {
 
   router.get('/messages/:fromId/:toId', authMiddleware, (req, res) => {
     const { fromId, toId } = req.params;
-    const { before, limit } = req.query;
+    const { before, beforeId, limit } = req.query;
 
     try {
       const result = messagesService.listConversation(fromId, toId, {
         requesterUserId: req.auth.userId,
         before,
+        beforeId,
         limit,
       });
       return res.status(result.status).json(result.body);
